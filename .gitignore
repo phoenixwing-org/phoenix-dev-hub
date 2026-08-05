@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-server/
+.runtime/
+config/services.json
+config/services.user.json
+.DS_Store
+*.log
+.env.local

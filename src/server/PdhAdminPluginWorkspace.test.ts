@@ -1,0 +1,283 @@
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { PdhAdminPluginWorkspace } from "./PdhAdminPluginWorkspace.js";
+
+const roots: string[] = [];
+
+function gitRoot(directory: string): void {
+  mkdirSync(directory, { recursive: true });
+  execFileSync("git", ["init", "-q"], { cwd: directory });
+}
+
+function pluginFixture(root: string, version = "0.1.0", ddl = false, moduleId = "example-admin-plugin"): string {
+  const product = path.join(root, `product-${version}`);
+  const pluginRoot = path.join(product, "packages/admin-plugin");
+  gitRoot(product);
+  mkdirSync(path.join(pluginRoot, "vue", moduleId), { recursive: true });
+  mkdirSync(path.join(pluginRoot, "midway", moduleId), { recursive: true });
+  writeFileSync(path.join(pluginRoot, "vue", moduleId, "config.ts"), "export default {}\n");
+  writeFileSync(path.join(pluginRoot, "midway", moduleId, "config.ts"), "export default {}\n");
+  writeFileSync(path.join(pluginRoot, "midway", moduleId, "pah-plugin.artifacts.json"), JSON.stringify({
+    formatVersion: 1,
+    moduleId,
+    version,
+  }));
+  if (ddl) {
+    mkdirSync(path.join(pluginRoot, "midway", moduleId, "migrations"));
+    writeFileSync(path.join(pluginRoot, "midway", moduleId, "migrations/001.sql"), "create table example(id int);\n");
+  }
+  writeFileSync(path.join(pluginRoot, "manifest.json"), JSON.stringify({
+    formatVersion: 2,
+    moduleId,
+    name: "Example Admin Plugin",
+    version,
+    publisher: "Fixture",
+    activationMode: "restart",
+    routePrefix: "/example",
+    entrypoints: {
+      web: `vue/${moduleId}/config.ts`,
+      node: `midway/${moduleId}/config.ts`,
+    },
+    routes: [{ id: "example", path: "/example/list", title: "Example" }],
+    navigation: { preferredGroupId: "pah-group-business", preferredGroupLabel: "业务", modules: [] },
+    migrations: ddl ? [{
+      id: `${moduleId}-001`,
+      version: 1,
+      checksum: `sha256:${createHash("sha256").update("create table example(id int);\n").digest("hex")}`,
+      description: "fixture",
+      artifact: { format: "sql", path: "migrations/001.sql" },
+    }] : [],
+  }, null, 2));
+  execFileSync("git", ["add", "."], { cwd: product });
+  execFileSync("git", ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "fixture"], { cwd: product });
+  return product;
+}
+
+function fixture(): {
+  root: string;
+  hub: string;
+  web: string;
+  node: string;
+  workspace: PdhAdminPluginWorkspace;
+} {
+  const root = mkdtempSync(path.join(os.tmpdir(), "pdh-admin-plugin-"));
+  roots.push(root);
+  const hub = path.join(root, "phoenix-dev-hub");
+  const web = path.join(root, "phoenix-admin-vue");
+  const node = path.join(root, "phoenix-admin-node");
+  mkdirSync(hub);
+  gitRoot(web);
+  gitRoot(node);
+  return {
+    root,
+    hub,
+    web,
+    node,
+    workspace: new PdhAdminPluginWorkspace(hub, { adminWebRoot: web, adminNodeRoot: node }),
+  };
+}
+
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+describe("Admin 插件开发工作区", () => {
+  it("识别 Manifest v2，并完成精确挂载、明细记录和开发卸载", () => {
+    const current = fixture();
+    const product = pluginFixture(current.root);
+    const candidate = current.workspace.inspect(product);
+    expect(candidate).toMatchObject({
+      configured: false,
+      manifest: {
+        moduleId: "example-admin-plugin",
+        preferredGroupId: "pah-group-business",
+      },
+    });
+    expect(candidate.sourceCommit).toMatch(/^[a-f0-9]{40}$/);
+
+    const added = current.workspace.add(product);
+    expect(added.mountState).toBe("unmounted");
+    const mounted = current.workspace.mount(added.registration.id);
+    expect(mounted.mountState).toBe("mounted");
+    expect(mounted.mounts).toHaveLength(2);
+    expect(mounted.mounts.every((entry) => entry.linkState === "mounted" && entry.excludeState === "managed")).toBe(true);
+    expect(mounted.recentOperation?.changes.some((change) => change.action === "created-link")).toBe(true);
+    for (const entry of mounted.mounts) {
+      expect(readlinkSync(entry.target)).toBe(path.relative(path.dirname(entry.target), entry.source));
+      expect(readFileSync(entry.excludePath, "utf8")).toContain(entry.excludePattern);
+    }
+
+    const unmounted = current.workspace.unmount(added.registration.id);
+    expect(unmounted.mountState).toBe("unmounted");
+    expect(unmounted.mounts.every((entry) => !existsSync(entry.target))).toBe(true);
+    expect(current.workspace.remove(added.registration.id).id).toBe(added.registration.id);
+  });
+
+  it("拒绝覆盖实体目录、外来版本链接和未开发卸载的列表移除", () => {
+    const current = fixture();
+    const first = current.workspace.add(pluginFixture(current.root, "0.1.0"));
+    current.workspace.mount(first.registration.id);
+    expect(() => current.workspace.remove(first.registration.id)).toThrow("先执行开发卸载");
+
+    const second = current.workspace.add(pluginFixture(current.root, "0.2.0"));
+    expect(second.mountState).toBe("conflict");
+    expect(() => current.workspace.mount(second.registration.id)).toThrow("拒绝覆盖外来链接");
+
+    current.workspace.unmount(first.registration.id);
+    const target = second.mounts[0]!.target;
+    mkdirSync(target, { recursive: true });
+    expect(() => current.workspace.mount(second.registration.id)).toThrow("拒绝覆盖实体目录/文件");
+  });
+
+  it("原子更新已挂载登记，并受控认领已经指向新 worktree 的 Vue/Node 链接", () => {
+    const current = fixture();
+    const oldProduct = pluginFixture(current.root, "0.1.0");
+    const newProduct = pluginFixture(current.root, "0.2.0");
+    const added = current.workspace.add(oldProduct);
+    const mounted = current.workspace.mount(added.registration.id);
+    const newCandidate = current.workspace.inspect(newProduct);
+
+    for (const mount of mounted.mounts) {
+      const source = mount.kind === "web" ? newCandidate.webModulePath : newCandidate.nodeModulePath;
+      unlinkSync(mount.target);
+      symlinkSync(path.relative(path.dirname(mount.target), source), mount.target, "dir");
+    }
+
+    const updated = current.workspace.repoint(added.registration.id, newProduct);
+    expect(updated).toMatchObject({
+      sourceState: "available",
+      mountState: "mounted",
+      identity: { moduleId: "example-admin-plugin", version: "0.2.0" },
+      registration: { productRoot: realpathSync(newProduct), manifestVersion: "0.2.0" },
+      recentOperation: { action: "repoint" },
+    });
+    expect(updated.recentOperation?.changes.filter((change) => change.action === "claimed-link")).toHaveLength(2);
+    expect(updated.mounts.every((mount) => realpathSync(mount.target) === mount.source)).toBe(true);
+    const saved = readFileSync(path.join(current.hub, ".runtime/admin-plugins.json"), "utf8");
+    expect(saved).toContain(newProduct);
+    expect(saved).not.toContain(oldProduct);
+  });
+
+  it("旧目录不可用时保留可理解状态，并用身份快照安全重新指向同模块", () => {
+    const current = fixture();
+    const oldProduct = pluginFixture(current.root, "0.1.0");
+    const added = current.workspace.add(oldProduct);
+    current.workspace.mount(added.registration.id);
+    rmSync(oldProduct, { recursive: true, force: true });
+
+    const unavailable = current.workspace.status(added.registration.id);
+    expect(unavailable).toMatchObject({
+      sourceState: "unavailable",
+      identity: { moduleId: "example-admin-plugin", version: "0.1.0" },
+    });
+    expect(unavailable.sourceError?.message).toContain("不存在");
+
+    const newProduct = pluginFixture(current.root, "0.2.0");
+    const updated = current.workspace.repoint(added.registration.id, newProduct);
+    expect(updated).toMatchObject({ sourceState: "available", mountState: "mounted" });
+    expect(updated.recentOperation?.changes.filter((change) => change.action === "replaced-link")).toHaveLength(2);
+  });
+
+  it("重新指向拒绝不同 moduleId、重复登记与第三方链接，且不改原登记", () => {
+    const current = fixture();
+    const oldProduct = pluginFixture(current.root, "0.1.0");
+    const added = current.workspace.add(oldProduct);
+    const mounted = current.workspace.mount(added.registration.id);
+    const different = pluginFixture(current.root, "9.0.0", false, "another-admin-plugin");
+    expect(() => current.workspace.repoint(added.registration.id, different)).toThrow("拒绝重新指向其他模块");
+
+    const nextProduct = pluginFixture(current.root, "0.2.0");
+    const target = mounted.mounts[0]!;
+    const thirdParty = path.join(current.root, "third-party-module");
+    mkdirSync(thirdParty);
+    unlinkSync(target.target);
+    symlinkSync(thirdParty, target.target, "dir");
+    expect(() => current.workspace.repoint(added.registration.id, nextProduct)).toThrow("既不指向旧目录也不指向本次新目录");
+    expect(current.workspace.status(added.registration.id).registration.productRoot).toBe(realpathSync(oldProduct));
+
+    unlinkSync(target.target);
+    symlinkSync(path.relative(path.dirname(target.target), target.source), target.target, "dir");
+    const duplicate = current.workspace.add(nextProduct);
+    expect(() => current.workspace.repoint(added.registration.id, nextProduct)).toThrow(duplicate.registration.id);
+  });
+
+  it("登记保存失败时恢复原链接，并明确报告自动回滚登记无法复写", () => {
+    const current = fixture();
+    const oldProduct = pluginFixture(current.root, "0.1.0");
+    const nextProduct = pluginFixture(current.root, "0.2.0");
+    const added = current.workspace.add(oldProduct);
+    const mounted = current.workspace.mount(added.registration.id);
+    const runtimeDirectory = path.join(current.hub, ".runtime");
+
+    chmodSync(runtimeDirectory, 0o500);
+    try {
+      expect(() => current.workspace.repoint(added.registration.id, nextProduct)).toThrow("自动回滚未完整完成");
+    } finally {
+      chmodSync(runtimeDirectory, 0o700);
+    }
+
+    for (const mount of mounted.mounts) {
+      expect(realpathSync(mount.target)).toBe(mount.source);
+      expect(readFileSync(mount.excludePath, "utf8")).toContain(mount.excludePattern);
+    }
+    const reloaded = new PdhAdminPluginWorkspace(current.hub, { adminWebRoot: current.web, adminNodeRoot: current.node });
+    expect(reloaded.status(added.registration.id).registration.productRoot).toBe(realpathSync(oldProduct));
+  });
+
+  it("包含 DDL 时只接受安全声明和 artifacts descriptor", () => {
+    const current = fixture();
+    const product = pluginFixture(current.root, "0.3.0", true);
+    const candidate = current.workspace.inspect(product);
+    expect(candidate.manifest.migrations).toHaveLength(1);
+    expect(candidate.artifactsPath).toContain("pah-plugin.artifacts.json");
+
+    const artifactsPath = path.join(product, "packages/admin-plugin/midway/example-admin-plugin/pah-plugin.artifacts.json");
+    const artifacts = JSON.parse(readFileSync(artifactsPath, "utf8")) as { version: string };
+    artifacts.version = "0.3.1";
+    writeFileSync(artifactsPath, JSON.stringify(artifacts));
+    expect(() => current.workspace.inspect(product)).toThrow("artifacts.version 与 manifest.version 不一致");
+    artifacts.version = "0.3.0";
+    writeFileSync(artifactsPath, JSON.stringify(artifacts));
+
+    const manifestPath = path.join(product, "packages/admin-plugin/manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { navigation: { preferredGroupId: string } };
+    manifest.navigation.preferredGroupId = "pah-group-other";
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    const warned = current.workspace.inspect(product);
+    expect(warned.mountAllowed).toBe(false);
+    expect(warned.validationWarnings[0]).toContain("pah-group-business");
+    const added = current.workspace.add(product);
+    expect(() => current.workspace.mount(added.registration.id)).toThrow("拒绝挂载");
+  });
+
+  it("本机配置使用 0600 保存且不包含数据库连接串内容", () => {
+    const current = fixture();
+    current.workspace.updateSettings({
+      adminWebRoot: current.web,
+      adminNodeRoot: current.node,
+      adminWebServiceId: "admin-web",
+      adminApiServiceId: "admin-api",
+      postgresEnvFile: path.join(current.root, "private-admin-plugin.env"),
+    });
+    const file = path.join(current.hub, ".runtime/admin-plugins.json");
+    const content = readFileSync(file, "utf8");
+    expect(content).toContain("private-admin-plugin.env");
+    expect(content).not.toContain("postgres://");
+  });
+});

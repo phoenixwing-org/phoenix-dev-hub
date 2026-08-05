@@ -1,0 +1,246 @@
+{
+  "sampleNotice": "复制为 config/services.user.json 后使用；示例按 Phoenix 同级工作区与独立 .worktrees 编排，换机器前必须复核路径、commit、SHA、integrity、数据库与端口。",
+  "version": 2,
+  "series": [
+    {
+      "id": "phoenix-admin",
+      "name": "Phoenix Admin",
+      "template": {
+        "runtimeSlot": "phoenix-admin",
+        "services": {
+          "web": {
+            "name": "Phoenix Admin Web",
+            "description": "Cool Admin Vue 前端",
+            "command": {
+              "executable": "pnpm",
+              "args": ["dev", "--host", "127.0.0.1", "--strictPort"]
+            },
+            "endpoints": [
+              {
+                "id": "web",
+                "label": "Web",
+                "port": 9000,
+                "openUrl": "http://127.0.0.1:9000/",
+                "healthUrl": "http://127.0.0.1:9000/"
+              }
+            ],
+            "externalStop": "confirm-matching-cwd",
+            "startOrder": 20
+          },
+          "api": {
+            "name": "Phoenix Admin API",
+            "description": "Cool Admin Node / Midway 后端",
+            "command": {
+              "executable": "pnpm",
+              "args": ["dev"],
+              "env": {
+                "PAH_DB_SYNCHRONIZE": "false",
+                "PAH_DB_INITIALIZE": "false",
+                "PAH_DB_DATABASE": "phoenix_admin_development"
+              }
+            },
+            "endpoints": [
+              {
+                "id": "api",
+                "label": "API",
+                "port": 8101,
+                "openUrl": "http://127.0.0.1:8101/",
+                "healthUrl": "http://127.0.0.1:8101/index.html"
+              }
+            ],
+            "externalStop": "confirm-matching-cwd",
+            "startOrder": 10
+          }
+        }
+      },
+      "profiles": [
+        {
+          "id": "development",
+          "name": "Admin 开发联调",
+          "runtimeSlot": "phoenix-admin-development",
+          "metadata": {
+            "description": "相邻源码工作区 / dev-only"
+          },
+          "policy": {
+            "environmentKind": "development",
+            "deploymentMode": "source-mounted",
+            "database": {
+              "serviceRole": "api",
+              "envName": "PAH_DB_DATABASE",
+              "name": "phoenix_admin_development"
+            }
+          },
+          "services": {
+            "web": {
+              "id": "admin-web",
+              "cwd": "../phoenix-admin-vue"
+            },
+            "api": {
+              "id": "admin-api",
+              "cwd": "../phoenix-admin-node"
+            }
+          }
+        },
+        {
+          "id": "release-validation",
+          "name": "Admin 发布验收环境（非正式）",
+          "runtimeSlot": "phoenix-admin-release-validation",
+          "metadata": {
+            "description": "独立 Git worktree Host / package-assembled / registry-only"
+          },
+          "policy": {
+            "environmentKind": "release-validation",
+            "deploymentMode": "package-assembled",
+            "database": {
+              "serviceRole": "api",
+              "envName": "PAH_DB_DATABASE",
+              "name": "phoenix_admin_release_validation",
+              "forbiddenNames": [
+                "phoenix_admin_development",
+                "phoenix_admin_preproduction",
+                "phoenix_admin_production"
+              ],
+              "preflight": {
+                "provider": "postgresql",
+                "host": "127.0.0.1",
+                "port": 5432,
+                "maintenanceDatabase": "postgres",
+                "usernameEnv": "USER",
+                "passwordEnv": "PAH_DB_PASSWORD",
+                "requiredRelations": [
+                  "base_sys_user",
+                  "plugin_info",
+                  "pah_plugin_installation"
+                ],
+                "requiredRelationsStatus": "provisional",
+                "creation": {
+                  "allowedDatabaseNames": ["phoenix_admin_release_validation"],
+                  "cleanupResponsibility": "验收结束后由本机操作者按受控流程回收该隔离数据库。"
+                }
+              }
+            },
+            "assembly": {
+              "outputRoot": ".runtime/assemblies/admin-release-validation",
+              "roleDirectories": {
+                "api": "node",
+                "web": "vue"
+              },
+              "packagePath": "../phoenix-open-issue-admin/dist/admin-plugin/phoenix-open-issue-0.6.2-admin.0.pah.cool",
+              "packageSha256": "c61db48e671da69eed001d0344381b4d64cfbe1f7131f3a748aa37b98f2c76ed",
+              "packageKind": "pah-business-module",
+              "moduleId": "phoenix-open-issue",
+              "version": "0.6.2-admin.0",
+              "nodeHost": {
+                "root": "../.worktrees/phoenix-admin-clean-validation/node",
+                "commit": "a2d0ff3529ef85a1d72c75a2a4296d354b4062eb"
+              },
+              "vueHost": {
+                "root": "../.worktrees/phoenix-admin-clean-validation/vue",
+                "commit": "9ecbbde5246828b1f797693230e203b9b4eff5d6"
+              },
+              "registryPackages": [
+                {
+                  "serviceRole": "web",
+                  "name": "phoenix-wing",
+                  "version": "0.6.2",
+                  "integrity": "sha512-sPNU/+erS5gaHTCOpSCRrwiG6b7blQ98XskzFTUfXLmFwxgciUiRfwyZxhsQOsjC/xBbjWgrAojpTX9tofl1mQ=="
+                }
+              ],
+              "installDependencies": true
+            }
+          },
+          "services": {
+            "web": {
+              "id": "admin-release-web",
+              "name": "Phoenix Admin 发布验收 Web",
+              "description": "独立 worktree Host 与不可变业务包；独立 9100 端口",
+              "command": {
+                "args": ["dev", "--host", "127.0.0.1", "--strictPort", "--port", "9100"],
+                "env": {
+                  "PAH_API_TARGET": "http://127.0.0.1:8201",
+                  "VITE_PAH_API_TARGET": "http://127.0.0.1:8201"
+                }
+              },
+              "endpoints": [
+                {
+                  "id": "web",
+                  "label": "Web",
+                  "port": 9100,
+                  "openUrl": "http://127.0.0.1:9100/",
+                  "healthUrl": "http://127.0.0.1:9100/"
+                }
+              ]
+            },
+            "api": {
+              "id": "admin-release-api",
+              "name": "Phoenix Admin 发布验收 API",
+              "description": "独立 worktree Host、数据库与 8201 端口",
+              "command": {
+                "env": {
+                  "PAH_SERVER_PORT": "8201",
+                  "PAH_DB_DATABASE": "phoenix_admin_release_validation",
+                  "PAH_DB_SYNCHRONIZE": "false",
+                  "PAH_DB_INITIALIZE": "false"
+                }
+              },
+              "endpoints": [
+                {
+                  "id": "api",
+                  "label": "API",
+                  "port": 8201,
+                  "openUrl": "http://127.0.0.1:8201/",
+                  "healthUrl": "http://127.0.0.1:8201/index.html"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "open-issue",
+      "name": "Phoenix Open Issue",
+      "template": {
+        "runtimeSlot": "open-issue",
+        "services": {
+          "app": {
+            "name": "Phoenix Open Issue",
+            "description": "旧独立网站示例；Core、API 与 Web 联合启动",
+            "command": {
+              "executable": "pnpm",
+              "args": ["dev"]
+            },
+            "endpoints": [
+              {
+                "id": "api",
+                "label": "API",
+                "port": 3400,
+                "healthUrl": "http://127.0.0.1:3400/"
+              },
+              {
+                "id": "web",
+                "label": "Web",
+                "port": 5183,
+                "openUrl": "http://127.0.0.1:5183/",
+                "healthUrl": "http://127.0.0.1:5183/"
+              }
+            ],
+            "externalStop": "confirm-matching-cwd"
+          }
+        }
+      },
+      "profiles": [
+        {
+          "id": "default",
+          "name": "默认实例",
+          "services": {
+            "app": {
+              "id": "open-issue",
+              "cwd": "../phoenix-open-issue"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

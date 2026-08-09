@@ -11,6 +11,7 @@ import type { PdhServiceSortMode } from "../stores/PdhWorkbenchPreferencesStore"
 defineOptions({ name: "PdhServiceTable" });
 const props = defineProps<{
   services: readonly ServiceRuntimeStatus[];
+  configurationErrors: readonly string[];
   selectedId: string;
   busyIds: ReadonlySet<string>;
   systemTerminal: SystemTerminalCapability;
@@ -51,10 +52,16 @@ const lifecycleLabels: Readonly<Record<ServiceRuntimeStatus["lifecycle"], string
 };
 const healthLabels: Readonly<Record<ServiceRuntimeStatus["health"], string>> = {
   ready: "健康就绪",
-  reachable: "端口可达",
-  partial: "部分就绪",
-  unhealthy: "不健康",
-  unknown: "未探测",
+  reachable: "仅端口可达",
+  partial: "部分端点未就绪",
+  unhealthy: "健康检查失败",
+  unknown: "尚未探测",
+};
+const ownershipLabels: Readonly<Record<ServiceRuntimeStatus["ownership"], string>> = {
+  hub: "Hub 管理",
+  external: "外部启动",
+  conflict: "身份不符",
+  none: "未接管",
 };
 const endpointPositions = ["api", "other", "web"] as const;
 const searchQueryModel = computed({
@@ -119,8 +126,10 @@ function serviceMatchesQuery(service: ServiceRuntimeStatus, query: string): bool
     service.profileEvidence?.wingVersion,
     service.profileEvidence?.database?.state,
     service.profileEvidence?.database?.message,
+    ...(service.definition.configurationErrors ?? []),
     lifecycleLabels[service.lifecycle],
     healthLabels[service.health],
+    ownershipLabels[service.ownership],
     ...service.endpoints.flatMap((endpoint) => [endpoint.id, endpoint.label, String(endpoint.port)]),
   ];
   return searchable.some((value) => String(value ?? "").toLocaleLowerCase("zh-CN").includes(query));
@@ -265,6 +274,7 @@ function isActive(service: ServiceRuntimeStatus): boolean {
 function profileAction(profile: ProfileGroup): "start" | "stop" | "switch" | "readonly" | "blocked" {
   if (!profile.lifecycleControl) return "readonly";
   if (profile.services.some(isActive)) return "stop";
+  if (profile.services.some((service) => service.definition.configurationErrors?.length)) return "blocked";
   if (profile.evidence?.database && profile.evidence.database.state !== "ready") return "blocked";
   const otherActive = props.services.some((service) => (
     service.definition.runtimeSlot === profile.runtimeSlot
@@ -284,6 +294,7 @@ function profileActionLabel(profile: ProfileGroup): string {
   const action = profileAction(profile);
   if (action === "readonly") return "只读监控";
   if (action === "blocked") {
+    if (profile.services.some((service) => service.definition.configurationErrors?.length)) return "配置错误";
     if (profile.evidence?.database?.state === "missing") return "数据库缺失";
     if (profile.evidence?.database?.state === "uninitialized") return "数据库未初始化";
     return "数据库预检失败";
@@ -297,10 +308,13 @@ function profileActionTitle(profile: ProfileGroup): string | undefined {
   if (profileAction(profile) === "readonly") {
     return "生产环境默认只读；生命周期操作需要独立 capability、维护窗口、可信备份、二次确认与审计";
   }
+  const configurationErrors = profile.services.flatMap((service) => service.definition.configurationErrors ?? []);
+  if (configurationErrors.length) return `配置错误：${configurationErrors.join("；")}`;
   return profile.evidence?.database?.message ?? profile.evidence?.message;
 }
 
 function serviceStartBlocked(service: ServiceRuntimeStatus): boolean {
+  if (service.definition.configurationErrors?.length) return true;
   const database = service.profileEvidence?.database;
   return Boolean(database && database.state !== "ready");
 }
@@ -398,7 +412,20 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
         </div>
       </header>
 
+      <div v-if="configurationErrors.length" class="configuration-alert" role="alert">
+        <strong>服务配置错误</strong>
+        <span v-for="error in configurationErrors" :key="error">{{ error }}</span>
+        <small>Hub 已保持运行；请在“服务配置”中修正后重新启动 Hub。</small>
+      </div>
+
       <table v-if="visibleServices.length" class="service-table">
+        <colgroup>
+          <col class="service-column">
+          <col class="status-column">
+          <col class="endpoint-column">
+          <col class="pid-column">
+          <col class="actions-column">
+        </colgroup>
         <thead>
           <tr>
             <th>服务</th>
@@ -419,82 +446,86 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
             @click="row.kind === 'service' && emit('select', row.service.definition.id)"
           >
             <td v-if="row.kind === 'series'" colspan="5" class="group-cell series-cell">
-              <button
-                type="button"
-                class="group-toggle"
-                :aria-expanded="!collapsedSeriesIds.includes(row.series.id)"
-                @click.stop="toggleCollapsed('series', row.series.id)"
-              >
-                <span aria-hidden="true">{{ collapsedSeriesIds.includes(row.series.id) ? '›' : '⌄' }}</span>
-                <strong>{{ row.series.name }}</strong>
-                <em>{{ row.series.profiles.length }} 个实例 · {{ row.series.services.length }} 个服务</em>
-              </button>
-              <button
-                v-if="row.series.profiles.length === 1"
-                type="button"
-                class="profile-action"
-                :class="{ readonly: ['readonly', 'blocked'].includes(profileAction(row.series.profiles[0]!)) }"
-                :disabled="['readonly', 'blocked'].includes(profileAction(row.series.profiles[0]!))"
-                :title="profileActionTitle(row.series.profiles[0]!)"
-                @click.stop="runProfileAction(row.series, row.series.profiles[0]!)"
-              >
-                {{ profileActionLabel(row.series.profiles[0]!).replace('此实例', '全部') }}
-              </button>
+              <div class="group-cell-content">
+                <button
+                  type="button"
+                  class="group-toggle"
+                  :aria-expanded="!collapsedSeriesIds.includes(row.series.id)"
+                  @click.stop="toggleCollapsed('series', row.series.id)"
+                >
+                  <span aria-hidden="true">{{ collapsedSeriesIds.includes(row.series.id) ? '›' : '⌄' }}</span>
+                  <strong>{{ row.series.name }}</strong>
+                  <em>{{ row.series.profiles.length }} 个实例 · {{ row.series.services.length }} 个服务</em>
+                </button>
+                <button
+                  v-if="row.series.profiles.length === 1"
+                  type="button"
+                  class="profile-action"
+                  :class="{ readonly: ['readonly', 'blocked'].includes(profileAction(row.series.profiles[0]!)) }"
+                  :disabled="['readonly', 'blocked'].includes(profileAction(row.series.profiles[0]!))"
+                  :title="profileActionTitle(row.series.profiles[0]!)"
+                  @click.stop="runProfileAction(row.series, row.series.profiles[0]!)"
+                >
+                  {{ profileActionLabel(row.series.profiles[0]!).replace('此实例', '全部') }}
+                </button>
+              </div>
             </td>
             <td v-else-if="row.kind === 'profile'" colspan="5" class="group-cell profile-cell">
-              <button
-                type="button"
-                class="group-toggle"
-                :aria-expanded="!collapsedProfileIds.includes(row.profile.key)"
-                @click.stop="toggleCollapsed('profile', row.profile.key)"
-              >
-                <span aria-hidden="true">{{ collapsedProfileIds.includes(row.profile.key) ? '›' : '⌄' }}</span>
-                <strong>{{ row.profile.name }}</strong>
-                <i
-                  v-if="row.profile.environmentKind"
-                  class="environment-badge"
-                  :data-environment="row.profile.environmentKind"
-                >{{ environmentLabels[row.profile.environmentKind] }}</i>
-                <i v-if="row.profile.deploymentMode" class="deployment-badge">
-                  {{ row.profile.deploymentMode === 'source-mounted' ? 'source-mounted · DEV ONLY' : 'package-assembled' }}
-                </i>
-                <i v-if="row.profile.evidence?.wingVersion">
-                  Wing {{ row.profile.evidence.wingSource === 'registry' ? 'Registry ' : '' }}{{ row.profile.evidence.wingVersion }}
-                </i>
-                <i v-else-if="row.profile.wingVersion">Wing {{ row.profile.wingVersion }}</i>
-                <i
-                  v-if="row.profile.evidence?.database"
-                  class="database-badge"
-                  :data-state="row.profile.evidence.database.state"
-                  :title="row.profile.evidence.database.message"
-                >{{ row.profile.evidence.database.state === 'ready' ? 'DB 就绪' : row.profile.evidence.database.state === 'missing' ? 'DB 缺失' : row.profile.evidence.database.state === 'uninitialized' ? (row.profile.evidence.database.requiredRelationsStatus === 'provisional' ? 'DB 基线待确认' : 'DB 未初始化') : 'DB 预检失败' }}</i>
-                <em>{{ profileSummary(row.profile) }}</em>
-              </button>
-              <div class="profile-actions">
-                <button
-                  v-if="row.profile.evidence?.database?.state === 'missing' && row.profile.services[0]?.definition.profilePolicy?.database.preflight?.creation"
-                  type="button"
-                  class="profile-action"
-                  :disabled="row.profile.services.some(isActive)"
-                  :title="row.profile.services.some(isActive) ? '先停止该实例的全部服务' : row.profile.evidence.database.message"
-                  @click.stop="emit('create-database', row.profile.services[0]!.definition.id)"
-                >创建隔离库</button>
-                <button
-                  v-if="row.profile.services.some((service) => service.ownership === 'hub') && row.profile.lifecycleControl"
-                  type="button"
-                  class="profile-action"
-                  @click.stop="restartProfile(row.series, row.profile)"
-                >重启此实例</button>
+              <div class="group-cell-content">
                 <button
                   type="button"
-                  class="profile-action"
-                  :class="{ readonly: ['readonly', 'blocked'].includes(profileAction(row.profile)) }"
-                  :disabled="['readonly', 'blocked'].includes(profileAction(row.profile))"
-                  :title="profileActionTitle(row.profile)"
-                  @click.stop="runProfileAction(row.series, row.profile)"
+                  class="group-toggle"
+                  :aria-expanded="!collapsedProfileIds.includes(row.profile.key)"
+                  @click.stop="toggleCollapsed('profile', row.profile.key)"
                 >
-                  {{ profileActionLabel(row.profile) }}
+                  <span aria-hidden="true">{{ collapsedProfileIds.includes(row.profile.key) ? '›' : '⌄' }}</span>
+                  <strong>{{ row.profile.name }}</strong>
+                  <i
+                    v-if="row.profile.environmentKind"
+                    class="environment-badge"
+                    :data-environment="row.profile.environmentKind"
+                  >{{ environmentLabels[row.profile.environmentKind] }}</i>
+                  <i v-if="row.profile.deploymentMode" class="deployment-badge">
+                    {{ row.profile.deploymentMode === 'source-mounted' ? 'source-mounted · DEV ONLY' : 'package-assembled' }}
+                  </i>
+                  <i v-if="row.profile.evidence?.wingVersion">
+                    Wing {{ row.profile.evidence.wingSource === 'registry' ? 'Registry ' : '' }}{{ row.profile.evidence.wingVersion }}
+                  </i>
+                  <i v-else-if="row.profile.wingVersion">Wing {{ row.profile.wingVersion }}</i>
+                  <i
+                    v-if="row.profile.evidence?.database"
+                    class="database-badge"
+                    :data-state="row.profile.evidence.database.state"
+                    :title="row.profile.evidence.database.message"
+                  >{{ row.profile.evidence.database.state === 'ready' ? 'DB 就绪' : row.profile.evidence.database.state === 'missing' ? 'DB 缺失' : row.profile.evidence.database.state === 'uninitialized' ? (row.profile.evidence.database.requiredRelationsStatus === 'provisional' ? 'DB 基线待确认' : 'DB 未初始化') : 'DB 预检失败' }}</i>
+                  <em>{{ profileSummary(row.profile) }}</em>
                 </button>
+                <div class="profile-actions">
+                  <button
+                    v-if="row.profile.evidence?.database?.state === 'missing' && row.profile.services[0]?.definition.profilePolicy?.database.preflight?.creation"
+                    type="button"
+                    class="profile-action"
+                    :disabled="row.profile.services.some(isActive)"
+                    :title="row.profile.services.some(isActive) ? '先停止该实例的全部服务' : row.profile.evidence.database.message"
+                    @click.stop="emit('create-database', row.profile.services[0]!.definition.id)"
+                  >创建隔离库</button>
+                  <button
+                    v-if="row.profile.services.some((service) => service.ownership === 'hub') && row.profile.lifecycleControl"
+                    type="button"
+                    class="profile-action"
+                    @click.stop="restartProfile(row.series, row.profile)"
+                  >重启此实例</button>
+                  <button
+                    type="button"
+                    class="profile-action"
+                    :class="{ readonly: ['readonly', 'blocked'].includes(profileAction(row.profile)) }"
+                    :disabled="['readonly', 'blocked'].includes(profileAction(row.profile))"
+                    :title="profileActionTitle(row.profile)"
+                    @click.stop="runProfileAction(row.series, row.profile)"
+                  >
+                    {{ profileActionLabel(row.profile) }}
+                  </button>
+                </div>
               </div>
             </td>
             <template v-else>
@@ -513,12 +544,20 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
                   :data-state="row.service.profileEvidence.state"
                   :title="`${row.service.profileEvidence.message} · DB ${row.service.profileEvidence.databaseName}${row.service.profileEvidence.wingIntegrity ? ` · ${row.service.profileEvidence.wingIntegrity}` : ''}`"
                 >{{ row.service.profileEvidence.state === 'source-mounted' ? 'DEV ONLY' : row.service.profileEvidence.state === 'verified' ? 'PACKAGE VERIFIED' : row.service.profileEvidence.state.toUpperCase() }}</em>
+                <em
+                  v-if="row.service.definition.configurationErrors?.length"
+                  class="configuration-error"
+                  :title="row.service.definition.configurationErrors.join('；')"
+                >配置错误</em>
               </div>
               <span>{{ row.service.definition.description }}</span>
             </td>
             <td>
               <span class="status" :data-state="row.service.lifecycle">
                 <i />{{ lifecycleLabels[row.service.lifecycle] }}
+              </span>
+              <span class="ownership" :data-ownership="row.service.ownership">
+                {{ ownershipLabels[row.service.ownership] }}
               </span>
               <span class="health" :data-health="row.service.health">{{ healthLabels[row.service.health] }}</span>
               <small v-if="row.service.message">{{ row.service.message }}</small>
@@ -560,7 +599,7 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
                   class="primary-action icon-action"
                   :disabled="busyIds.has(row.service.definition.id) || row.service.definition.profilePolicy?.lifecycleControl === false || serviceStartBlocked(row.service)"
                   :aria-label="`启动 ${row.service.definition.name}`"
-                  :title="serviceStartBlocked(row.service) ? row.service.profileEvidence?.database?.message : '启动'"
+                  :title="row.service.definition.configurationErrors?.length ? `配置错误：${row.service.definition.configurationErrors.join('；')}` : serviceStartBlocked(row.service) ? row.service.profileEvidence?.database?.message : '启动'"
                   @click="emit('start', row.service.definition.id)"
                 >
                   <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -625,8 +664,8 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
                     <button
                       type="button"
                       role="menuitem"
-                      :disabled="!systemTerminal.available || row.service.definition.profilePolicy?.lifecycleControl === false"
-                      :title="row.service.definition.profilePolicy?.lifecycleControl === false ? '生产环境默认只读，Hub 不打开运行目录终端' : systemTerminal.available ? `使用 ${systemTerminal.label} 打开服务目录` : systemTerminal.reason"
+                      :disabled="!systemTerminal.available || row.service.definition.profilePolicy?.lifecycleControl === false || Boolean(row.service.definition.configurationErrors?.length)"
+                      :title="row.service.definition.configurationErrors?.length ? `配置错误：${row.service.definition.configurationErrors.join('；')}` : row.service.definition.profilePolicy?.lifecycleControl === false ? '生产环境默认只读，Hub 不打开运行目录终端' : systemTerminal.available ? `使用 ${systemTerminal.label} 打开服务目录` : systemTerminal.reason"
                       @click="chooseMenuAction($event, 'terminal', row.service.definition.id)"
                     >
                       打开系统终端
@@ -688,7 +727,15 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
 .tree-actions button:hover { background: var(--pnw-control-hover-bg, var(--pnw-workbench-default-hover-bg, rgba(59, 130, 246, .08))); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); }
 .service-count { padding: 6px 10px; border-radius: 999px; background: var(--pnw-control-active-bg, var(--pnw-workbench-default-active-bg, rgba(37, 99, 235, .1))); color: var(--pnw-control-active-text, var(--pnw-workbench-default-active-text, #2563eb)); font-size: 12px; font-weight: 700; }
 .service-table-wrap { flex: 1 1 auto; min-width: 0; overflow-x: auto; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 10px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); box-shadow: 0 12px 34px rgba(15, 23, 42, .055); }
-.service-table { width: 100%; border-collapse: collapse; min-width: 650px; color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); }
+.service-table { width: 100%; min-width: 960px; table-layout: fixed; border-collapse: collapse; color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); }
+.service-column { width: 36%; }
+.status-column { width: 15%; }
+.endpoint-column { width: 28%; }
+.pid-column { width: 8%; }
+.actions-column { width: 13%; }
+.configuration-alert { display: grid; gap: 3px; padding: 9px 14px; border-bottom: 1px solid rgba(220, 38, 38, .34); background: rgba(220, 38, 38, .1); color: var(--pnw-workbench-text, #e2e8f0); font-size: 11px; }
+.configuration-alert strong { color: #ef4444; font-size: 12px; }
+.configuration-alert small { color: var(--pnw-workbench-muted, #94a3b8); }
 th { padding: 10px 14px; text-align: left; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); background: var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, rgba(148, 163, 184, .08))); border-bottom: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
 td { padding: 12px 10px; border-bottom: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #e2e8f0)); vertical-align: middle; font-size: 12px; }
 tbody tr { cursor: pointer; transition: background .15s ease; }
@@ -699,12 +746,11 @@ tbody tr:last-child td { border-bottom: 0; }
 .series-cell { border-top: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
 tbody .series-row:first-child .series-cell { border-top: 0; }
 .profile-cell { padding-left: 26px; background: color-mix(in srgb, var(--pnw-workbench-bg, #0f172a) 65%, transparent); }
-.group-cell, .group-toggle { align-items: center; }
-.group-cell { justify-content: space-between; }
-.group-cell, .group-toggle { display: flex; gap: 8px; }
-.group-toggle { min-width: 0; flex: 1 1 auto; min-height: 34px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.group-cell-content, .group-toggle { align-items: center; }
+.group-cell-content { width: 100%; min-width: 0; display: flex; justify-content: space-between; gap: 8px; }
+.group-toggle { min-width: 0; flex: 1 1 auto; min-height: 34px; display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .group-toggle > span { width: 13px; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 16px; }
-.group-toggle strong { margin: 0; font-size: 12px; }
+.group-toggle strong { margin: 0; font-size: 12px; white-space: nowrap; }
 .group-toggle em, .group-toggle i { color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 9px; font-style: normal; font-weight: 600; }
 .group-toggle i { padding: 1px 5px; border-radius: 999px; background: rgba(37, 99, 235, .11); color: var(--pnw-control-active-text, #60a5fa); }
 .group-toggle .environment-badge[data-environment="release-validation"] { background: rgba(245, 158, 11, .14); color: #b45309; }
@@ -715,6 +761,7 @@ tbody .series-row:first-child .series-cell { border-top: 0; }
 .group-toggle .database-badge[data-state="uninitialized"],
 .group-toggle .database-badge[data-state="unavailable"] { background: rgba(245, 158, 11, .14); color: #b45309; }
 .group-toggle .deployment-badge { background: rgba(139, 92, 246, .12); color: #7c3aed; }
+.configuration-error { padding: 1px 5px; border-radius: 999px; background: rgba(220, 38, 38, .14); color: #dc2626 !important; font-size: 9px !important; font-style: normal; font-weight: 700; }
 .profile-actions { display: flex; align-items: center; gap: 5px; }
 .profile-action { flex: 0 0 auto; min-height: 26px; padding: 0 8px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); border-radius: 5px; background: transparent; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font: inherit; font-size: 9px; font-weight: 700; cursor: pointer; }
 .profile-action:hover { border-color: var(--pnw-focus-ring, #2563eb); color: var(--pnw-control-active-text, #60a5fa); }
@@ -730,13 +777,17 @@ td > span { color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted,
 .service-title .assembly-evidence[data-state="source-mounted"] { background: rgba(245, 158, 11, .12); color: #b45309; }
 .service-title .assembly-evidence[data-state="verified"] { background: rgba(22, 163, 74, .12); color: #15803d; }
 .service-title .assembly-evidence[data-state="invalid"] { background: rgba(220, 38, 38, .14); color: #dc2626; }
-.status { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #475569)); }
-.status i { width: 8px; height: 8px; border-radius: 999px; background: #94a3b8; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; white-space: nowrap; color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #475569)); }
+.status i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 999px; background: #94a3b8; }
 .status[data-state="running"] i { background: #16a34a; box-shadow: 0 0 0 4px rgba(22, 163, 74, .1); }
 .status[data-state="starting"] i { background: #2563eb; }
 .status[data-state="stopping"] i, .status[data-state="conflict"] i { background: #f59e0b; }
 .status[data-state="external"] i { background: #8b5cf6; }
-.health { display: inline-block; margin-top: 4px; padding: 1px 5px; border-radius: 999px; background: rgba(148, 163, 184, .12); color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 9px; }
+.ownership { display: inline-block; margin: 4px 0 0 5px; padding: 1px 5px; border-radius: 999px; background: rgba(148, 163, 184, .12); color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 9px; font-weight: 700; white-space: nowrap; }
+.ownership[data-ownership="hub"] { background: rgba(37, 99, 235, .1); color: #2563eb; }
+.ownership[data-ownership="external"] { background: rgba(139, 92, 246, .12); color: #7c3aed; }
+.ownership[data-ownership="conflict"] { background: rgba(245, 158, 11, .14); color: #b45309; }
+.health { display: inline-block; margin-top: 4px; padding: 1px 5px; border-radius: 999px; background: rgba(148, 163, 184, .12); color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 9px; white-space: nowrap; }
 .health[data-health="ready"] { background: rgba(22, 163, 74, .1); color: #15803d; }
 .health[data-health="reachable"] { background: rgba(37, 99, 235, .1); color: #2563eb; }
 .health[data-health="partial"] { background: rgba(245, 158, 11, .12); color: #b45309; }

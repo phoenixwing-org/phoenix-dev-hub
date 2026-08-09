@@ -137,6 +137,35 @@ afterEach(async () => {
 });
 
 describe("PdhServiceManager", () => {
+  it("配置路径失效时显示不健康并在 spawn 前拒绝启动", async () => {
+    const port = await freePort();
+    const runtimeEnvProvider = vi.fn(() => ({}));
+    const service = {
+      ...definition("invalid-config", port),
+      cwd: path.join(projectRoot, "deleted-worktree"),
+      configurationErrors: ["工作目录不存在：deleted-worktree"],
+    };
+    const manager = new PdhServiceManager([service], undefined, runtimeEnvProvider);
+    managers.push(manager);
+
+    await expect(manager.status(service.id)).resolves.toMatchObject({
+      lifecycle: "stopped",
+      health: "unhealthy",
+      managed: false,
+      message: expect.stringContaining("配置错误"),
+      endpoints: [{ probeState: "unreachable", pids: [] }],
+    });
+    await expect(manager.list()).resolves.toMatchObject({
+      configurationErrors: [expect.stringMatching(/工作目录不存在.*影响：invalid-config/)],
+      services: [{ definition: { id: service.id }, health: "unhealthy" }],
+    });
+    await expect(manager.start(service.id)).rejects.toMatchObject({
+      code: "SERVICE_CONFIG_INVALID",
+      statusCode: 409,
+    });
+    expect(runtimeEnvProvider).not.toHaveBeenCalled();
+  });
+
   it("固定 process → command → Hub runtime 环境顺序，并清除父进程与用户伪造的保留键", () => {
     const service: ServiceDefinition = {
       ...definition("environment-merge", 1),

@@ -52,6 +52,7 @@ const activeWebsiteModule = ref("all");
 const activeBottomTabId = ref("");
 
 const services = ref<readonly ServiceRuntimeStatus[]>([]);
+const serviceConfigurationErrors = ref<readonly string[]>([]);
 const adminPluginCatalog = ref<AdminPluginCatalogResponse>();
 const selectedAdminPluginId = ref("");
 const selectedId = ref("");
@@ -279,6 +280,7 @@ async function refreshServices(): Promise<void> {
   try {
     const response = await devHubApi.listServices();
     services.value = response.services;
+    serviceConfigurationErrors.value = response.configurationErrors ?? [];
     lastRefreshAt.value = new Date(response.generatedAt);
     if (!selectedId.value && response.services[0]) selectedId.value = response.services[0].definition.id;
     if (selectedId.value && !response.services.some((item) => item.definition.id === selectedId.value)) {
@@ -718,6 +720,7 @@ onBeforeUnmount(() => {
       <PdhServiceTable
         v-else
         :services="filteredServices"
+        :configuration-errors="serviceConfigurationErrors"
         :selected-id="selectedId"
         :busy-ids="busyIds"
         :system-terminal="systemTerminal"

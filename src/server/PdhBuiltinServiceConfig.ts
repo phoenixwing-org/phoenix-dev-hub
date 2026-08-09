@@ -224,12 +224,16 @@ export class PdhBuiltinServiceConfigStore {
   }
 
   allDefinitions(): readonly ServiceDefinition[] {
-    return resolveServiceConfiguration(this.sourceDocument(), this.#projectRoot);
+    return resolveServiceConfiguration(this.sourceDocument(), this.#projectRoot, {
+      tolerateUnavailablePaths: true,
+    });
   }
 
   effectiveDefinitions(): readonly ServiceDefinition[] {
     const baselineById = new Map(
-      resolveServiceConfiguration(this.#baselineSource, this.#projectRoot).map((definition) => [definition.id, definition]),
+      resolveServiceConfiguration(this.#baselineSource, this.#projectRoot, {
+        tolerateUnavailablePaths: true,
+      }).map((definition) => [definition.id, definition]),
     );
     return this.allDefinitions()
       .filter((definition) => !this.#removed.has(definition.id))
@@ -241,7 +245,9 @@ export class PdhBuiltinServiceConfigStore {
   }
 
   catalog(): BuiltinServiceConfigCatalogResponse {
-    const baselineDefinitions = resolveServiceConfiguration(this.#baselineSource, this.#projectRoot);
+    const baselineDefinitions = resolveServiceConfiguration(this.#baselineSource, this.#projectRoot, {
+      tolerateUnavailablePaths: true,
+    });
     const baselineById = new Map(baselineDefinitions.map((definition) => [definition.id, definition]));
     const currentDefinitions = this.allDefinitions();
     const currentById = new Map(currentDefinitions.map((definition) => [definition.id, definition]));
@@ -326,7 +332,9 @@ export class PdhBuiltinServiceConfigStore {
       throw new DevHubError("BUILTIN_SERVICE_NOT_FOUND", `未知内置服务：${serviceId}`, 404);
     }
     if (!current) throw new DevHubError("BUILTIN_SERVICE_REMOVED", "该默认服务已隐藏", 409);
-    const baseline = resolveServiceConfiguration(this.#baselineSource, this.#projectRoot)
+    const baseline = resolveServiceConfiguration(this.#baselineSource, this.#projectRoot, {
+      tolerateUnavailablePaths: true,
+    })
       .find((definition) => definition.id === serviceId);
     if (baseline) this.#setServiceOverride(current, baseline);
     this.#removed.add(serviceId);

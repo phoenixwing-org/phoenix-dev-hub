@@ -29,6 +29,12 @@ interface ServiceConfigFileV1 {
 export interface LoadedServiceConfiguration {
   readonly source: ServiceConfigurationFileV2;
   readonly definitions: readonly ServiceDefinition[];
+  readonly configurationErrors?: readonly string[];
+}
+
+export interface ResolveServiceConfigurationOptions {
+  /** 启动 Hub 时允许本机路径暂时不存在；编辑、导入等写入口仍使用严格校验。 */
+  readonly tolerateUnavailablePaths?: boolean;
 }
 
 const SERVICE_CONFIG_CANDIDATES = [
@@ -231,11 +237,21 @@ function parseMetadata(value: unknown, label: string): ServiceProfileMetadata | 
   return Object.fromEntries(entries) as ServiceProfileMetadata;
 }
 
-function resolveExistingPath(value: unknown, label: string, projectRoot: string, kind: "file" | "directory"): string {
+function resolveExistingPath(
+  value: unknown,
+  label: string,
+  projectRoot: string,
+  kind: "file" | "directory",
+  options: ResolveServiceConfigurationOptions = {},
+): string {
   const resolved = path.resolve(projectRoot, requiredString(value, label));
-  if (!existsSync(resolved)) throw new DevHubError("INVALID_CONFIG", `${label} 不存在：${resolved}`, 500);
+  if (!existsSync(resolved)) {
+    if (options.tolerateUnavailablePaths) return resolved;
+    throw new DevHubError("INVALID_CONFIG", `${label} 不存在：${resolved}`, 500);
+  }
   const stat = statSync(resolved);
   if ((kind === "file" && !stat.isFile()) || (kind === "directory" && !stat.isDirectory())) {
+    if (options.tolerateUnavailablePaths) return resolved;
     throw new DevHubError("INVALID_CONFIG", `${label} 必须是${kind === "file" ? "文件" : "目录"}：${resolved}`, 500);
   }
   return resolved;
@@ -249,14 +265,19 @@ function safeRelativeDirectory(value: unknown, label: string): string {
   return raw;
 }
 
-function parseGitInput(value: unknown, label: string, projectRoot: string) {
+function parseGitInput(
+  value: unknown,
+  label: string,
+  projectRoot: string,
+  options: ResolveServiceConfigurationOptions,
+) {
   assertObject(value, label);
   const commit = requiredString(value.commit, `${label}.commit`);
   if (!/^[a-f0-9]{40}$/.test(commit)) {
     throw new DevHubError("INVALID_CONFIG", `${label}.commit 必须是 40 位 Git commit`, 500);
   }
   return {
-    root: resolveExistingPath(value.root, `${label}.root`, projectRoot, "directory"),
+    root: resolveExistingPath(value.root, `${label}.root`, projectRoot, "directory", options),
     commit,
   };
 }
@@ -303,6 +324,7 @@ function parseProfilePolicy(
   label: string,
   projectRoot: string,
   serviceRoles: ReadonlySet<string>,
+  options: ResolveServiceConfigurationOptions,
 ): ServiceProfilePolicy {
   assertObject(value, label);
   const environmentKind = requiredString(value.environmentKind, `${label}.environmentKind`);
@@ -517,13 +539,19 @@ function parseProfilePolicy(
     assembly = {
       outputRoot,
       roleDirectories,
-      packagePath: resolveExistingPath(value.assembly.packagePath, `${label}.assembly.packagePath`, projectRoot, "file"),
+      packagePath: resolveExistingPath(
+        value.assembly.packagePath,
+        `${label}.assembly.packagePath`,
+        projectRoot,
+        "file",
+        options,
+      ),
       packageSha256,
       packageKind: "pah-business-module",
       moduleId,
       version: packageVersion,
-      nodeHost: parseGitInput(value.assembly.nodeHost, `${label}.assembly.nodeHost`, projectRoot),
-      vueHost: parseGitInput(value.assembly.vueHost, `${label}.assembly.vueHost`, projectRoot),
+      nodeHost: parseGitInput(value.assembly.nodeHost, `${label}.assembly.nodeHost`, projectRoot, options),
+      vueHost: parseGitInput(value.assembly.vueHost, `${label}.assembly.vueHost`, projectRoot, options),
       registryPackages,
       installDependencies: value.assembly.installDependencies === true,
     };
@@ -551,7 +579,12 @@ function parseSourceFragment(value: unknown, label: string): ServiceSourceDefini
   return cloneJson(value) as ServiceSourceDefinition;
 }
 
-function normalizeSeries(value: unknown, index: number, projectRoot: string): ServiceSeriesSource {
+function normalizeSeries(
+  value: unknown,
+  index: number,
+  projectRoot: string,
+  options: ResolveServiceConfigurationOptions = {},
+): ServiceSeriesSource {
   assertObject(value, `series[${index}]`);
   const id = requiredId(value.id, `series[${index}].id`);
   assertObject(value.template, `series ${id}.template`);
@@ -592,6 +625,7 @@ function normalizeSeries(value: unknown, index: number, projectRoot: string): Se
             ...Object.keys(templateServices).filter((role) => services[role] !== false),
             ...Object.entries(services).filter(([, source]) => source !== false).map(([role]) => role),
           ]),
+          options,
         );
     return {
       id: profileId,
@@ -613,12 +647,13 @@ function normalizeSeries(value: unknown, index: number, projectRoot: string): Se
 export function resolveServiceConfiguration(
   source: ServiceConfigurationFileV2,
   projectRoot: string,
+  options: ResolveServiceConfigurationOptions = {},
 ): readonly ServiceDefinition[] {
   const definitions: ServiceDefinition[] = [];
   const serviceIds = new Set<string>();
   const seriesIds = new Set<string>();
   for (const [seriesIndex, rawSeries] of source.series.entries()) {
-    const series = normalizeSeries(rawSeries, seriesIndex, projectRoot);
+    const series = normalizeSeries(rawSeries, seriesIndex, projectRoot, options);
     if (seriesIds.has(series.id)) {
       throw new DevHubError("INVALID_CONFIG", `Series ID 重复：${series.id}`, 500);
     }
@@ -643,8 +678,25 @@ export function resolveServiceConfiguration(
           moduleName: series.name,
         };
         const definition = parseServiceDefinition(raw, projectRoot, {
-          allowMissingCwd: Boolean(assembledDirectory),
+          allowMissingCwd: Boolean(assembledDirectory) || options.tolerateUnavailablePaths,
         });
+        const configurationErrors: string[] = [];
+        if (options.tolerateUnavailablePaths && !assembledDirectory) {
+          if (!existsSync(definition.cwd) || !statSync(definition.cwd).isDirectory()) {
+            configurationErrors.push(`工作目录不存在：${definition.cwd}`);
+          }
+        }
+        const assembly = profile.policy?.assembly;
+        if (options.tolerateUnavailablePaths && assembly) {
+          if (!existsSync(assembly.packagePath) || !statSync(assembly.packagePath).isFile()) {
+            configurationErrors.push(`发布装配包不存在：${assembly.packagePath}`);
+          }
+          for (const [label, root] of [["Admin Node Host", assembly.nodeHost.root], ["Admin Vue Host", assembly.vueHost.root]] as const) {
+            if (!existsSync(root) || !statSync(root).isDirectory()) {
+              configurationErrors.push(`${label} 目录不存在：${root}`);
+            }
+          }
+        }
         if (profile.policy?.database.serviceRole === role) {
           const database = profile.policy.database;
           if (definition.command.env?.[database.envName] !== database.name) {
@@ -681,6 +733,7 @@ export function resolveServiceConfiguration(
           profileMetadata: profile.metadata,
           profilePolicy: profile.policy,
           startOrder: merged.startOrder ?? definition.startOrder ?? 0,
+          ...(configurationErrors.length > 0 ? { configurationErrors } : {}),
         });
       }
       if (serviceCount === 0) {
@@ -826,6 +879,7 @@ function convertVersion1(file: ServiceConfigFileV1): ServiceConfigurationFileV2 
 export function parseServiceConfigurationDocument(
   value: unknown,
   projectRoot: string,
+  options: ResolveServiceConfigurationOptions = {},
 ): LoadedServiceConfiguration {
   assertObject(value, "services.json");
   let source: ServiceConfigurationFileV2;
@@ -834,12 +888,12 @@ export function parseServiceConfigurationDocument(
   } else if (value.version === 2 && Array.isArray(value.series)) {
     source = {
       version: 2,
-      series: value.series.map((series, index) => normalizeSeries(series, index, projectRoot)),
+      series: value.series.map((series, index) => normalizeSeries(series, index, projectRoot, options)),
     };
   } else {
     throw new DevHubError("INVALID_CONFIG", "services.json 必须使用 version=1 services 或 version=2 series", 500);
   }
-  return { source, definitions: resolveServiceConfiguration(source, projectRoot) };
+  return { source, definitions: resolveServiceConfiguration(source, projectRoot, options) };
 }
 
 export function resolveServiceConfigurationPath(
@@ -866,9 +920,18 @@ export function loadServiceConfiguration(
   projectRoot: string,
   explicitPath?: string,
 ): LoadedServiceConfiguration {
-  const configPath = resolveServiceConfigurationPath(projectRoot, explicitPath);
-  const parsed = JSON.parse(readFileSync(configPath, "utf8")) as unknown;
-  return parseServiceConfigurationDocument(parsed, projectRoot);
+  try {
+    const configPath = resolveServiceConfigurationPath(projectRoot, explicitPath);
+    const parsed = JSON.parse(readFileSync(configPath, "utf8")) as unknown;
+    return parseServiceConfigurationDocument(parsed, projectRoot, { tolerateUnavailablePaths: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      source: { version: 2, series: [] },
+      definitions: [],
+      configurationErrors: [message],
+    };
+  }
 }
 
 export function loadServiceDefinitions(projectRoot: string): readonly ServiceDefinition[] {

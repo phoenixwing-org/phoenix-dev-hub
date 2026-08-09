@@ -45,7 +45,23 @@ const port = Number(process.env.PHOENIX_DEV_HUB_PORT ?? 42_100);
 if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("PHOENIX_DEV_HUB_PORT 不合法");
 
 const projectConfig = new PdhProjectConfigStore(projectRoot);
-const builtinServiceConfig = new PdhBuiltinServiceConfigStore(projectRoot, loadServiceConfiguration(projectRoot));
+const loadedServiceConfiguration = loadServiceConfiguration(projectRoot);
+const configurationWarnings = new Map<string, string[]>();
+for (const warning of loadedServiceConfiguration.configurationErrors ?? []) {
+  configurationWarnings.set(warning, ["服务配置文件"]);
+}
+for (const definition of loadedServiceConfiguration.definitions) {
+  for (const warning of definition.configurationErrors ?? []) {
+    configurationWarnings.set(warning, [
+      ...(configurationWarnings.get(warning) ?? []),
+      definition.name,
+    ]);
+  }
+}
+for (const [warning, affectedServices] of configurationWarnings) {
+  process.stderr.write(`服务配置警告：${warning}（影响：${affectedServices.join("、")}）\n`);
+}
+const builtinServiceConfig = new PdhBuiltinServiceConfigStore(projectRoot, loadedServiceConfiguration);
 const initialBuiltinDefinitions = builtinServiceConfig.effectiveDefinitions();
 const adminPluginWorkspace = new PdhAdminPluginWorkspace(projectRoot, {
   adminWebRoot: initialBuiltinDefinitions.find((definition) => definition.id === "admin-web")?.cwd,
@@ -62,6 +78,7 @@ const manager = new PdhServiceManager([
   ...initialBuiltinDefinitions,
   ...projectConfig.serviceDefinitions(),
 ], new PdhSystemTerminal(), controlledToolRuntimeEnvProvider);
+manager.setConfigurationErrors(loadedServiceConfiguration.configurationErrors ?? []);
 const handleApi = createApiHandler(
   manager,
   projectConfig,

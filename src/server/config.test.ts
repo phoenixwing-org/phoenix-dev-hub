@@ -17,6 +17,60 @@ function loadTestConfiguration() {
 }
 
 describe("services.json", () => {
+  it("配置文件整体损坏时返回可展示错误而不抛出 DevHubError", () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "pdh-config-invalid-json-"));
+    const configPath = path.join(root, "services.user.json");
+    try {
+      writeFileSync(configPath, "{ invalid json\n");
+      expect(loadServiceConfiguration(root, configPath)).toEqual({
+        source: { version: 2, series: [] },
+        definitions: [],
+        configurationErrors: [expect.any(String)],
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("启动加载保留路径失效的服务并返回可见配置错误，严格编辑校验仍拒绝", () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "pdh-config-missing-path-"));
+    const configPath = path.join(root, "services.user.json");
+    const document = {
+      version: 2,
+      series: [{
+        id: "missing-site",
+        name: "Missing Site",
+        template: {
+          services: {
+            web: {
+              name: "Missing Web",
+              cwd: "./deleted-worktree",
+              command: { executable: "pnpm", args: ["dev"] },
+              endpoints: [{ id: "web", label: "Web", port: 45_101 }],
+            },
+          },
+        },
+        profiles: [{
+          id: "default",
+          name: "默认实例",
+          services: { web: { id: "missing-web" } },
+        }],
+      }],
+    };
+    try {
+      writeFileSync(configPath, `${JSON.stringify(document)}\n`);
+      const loaded = loadServiceConfiguration(root, configPath);
+      expect(loaded.definitions).toHaveLength(1);
+      expect(loaded.definitions[0]).toMatchObject({
+        id: "missing-web",
+        configurationErrors: [expect.stringContaining("工作目录不存在")],
+      });
+      expect(() => parseServiceConfigurationDocument(document, root)).toThrow("工作目录不存在");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("用户配置优先于旧配置且不会自动执行 sample", () => {
     const root = mkdtempSync(path.join(os.tmpdir(), "pdh-config-path-"));
     const configRoot = path.join(root, "config");

@@ -163,6 +163,7 @@ export class PdhServiceManager {
   readonly #runtimeEnvProvider: PdhRuntimeEnvProvider;
   readonly #profileAssembly: PdhProfileAssembly;
   readonly #profileDatabasePreflight: PdhProfileDatabasePreflight;
+  #configurationErrors: readonly string[] = [];
 
   constructor(
     definitions: readonly ServiceDefinition[],
@@ -180,6 +181,10 @@ export class PdhServiceManager {
 
   serviceIds(): ReadonlySet<string> {
     return new Set(this.#definitions.keys());
+  }
+
+  setConfigurationErrors(errors: readonly string[]): void {
+    this.#configurationErrors = [...new Set(errors)];
   }
 
   definition(serviceId: string): ServiceDefinition {
@@ -265,11 +270,52 @@ export class PdhServiceManager {
     const services = await Promise.all(
       [...this.#definitions.values()].map((definition) => this.status(definition.id)),
     );
-    return { services, generatedAt: new Date().toISOString() };
+    const pathWarnings = new Map<string, string[]>();
+    for (const definition of this.#definitions.values()) {
+      for (const warning of definition.configurationErrors ?? []) {
+        pathWarnings.set(warning, [...(pathWarnings.get(warning) ?? []), definition.name]);
+      }
+    }
+    const configurationErrors = [
+      ...this.#configurationErrors,
+      ...[...pathWarnings].map(([warning, affectedServices]) => (
+        `${warning}（影响：${affectedServices.join("、")}）`
+      )),
+    ];
+    return {
+      services,
+      generatedAt: new Date().toISOString(),
+      ...(configurationErrors.length > 0
+        ? { configurationErrors: [...new Set(configurationErrors)] }
+        : {}),
+    };
   }
 
   async status(serviceId: string): Promise<ServiceRuntimeStatus> {
     const definition = this.#definition(serviceId);
+    if (definition.configurationErrors?.length) {
+      const message = `配置错误：${definition.configurationErrors.join("；")}`;
+      return {
+        definition,
+        lifecycle: "stopped",
+        health: "unhealthy",
+        build: { state: "unknown" },
+        ownership: "none",
+        managed: false,
+        endpoints: definition.endpoints.map((endpoint) => ({
+          ...endpoint,
+          reachable: false,
+          healthy: null,
+          probeState: "unreachable",
+          probeMessage: message,
+          pids: [],
+        })),
+        externalProcesses: [],
+        identityMatched: null,
+        logSource: "captured",
+        message,
+      };
+    }
     const assemblyEvidence = this.#profileAssembly.inspect(definition);
     const [databaseEvidence, endpoints, identityProbe] = await Promise.all([
       this.#profileDatabasePreflight.inspect(definition, [...this.#definitions.values()]),
@@ -351,7 +397,7 @@ export class PdhServiceManager {
                 ? healthMessage(endpoints, health)
               : starting
                 ? "进程已启动，正在等待身份与健康检查就绪；这不影响停止操作"
-                : `${healthMessage(endpoints, health) ?? "健康检查未完全就绪"}；进程仍在运行，这不影响停止操作`,
+                : `${healthMessage(endpoints, health) ?? "健康检查未完全就绪"}；Hub 管理的进程仍在运行，这不影响停止操作`,
       };
     }
 
@@ -464,6 +510,13 @@ export class PdhServiceManager {
   async start(serviceId: string): Promise<ServiceRuntimeStatus> {
     const definition = this.#definition(serviceId);
     this.#assertLifecycleControl(definition, "启动");
+    if (definition.configurationErrors?.length) {
+      throw new DevHubError(
+        "SERVICE_CONFIG_INVALID",
+        `${definition.name} 配置无效：${definition.configurationErrors.join("；")}`,
+        409,
+      );
+    }
     if (this.#starting.has(serviceId)) {
       throw new DevHubError("START_IN_PROGRESS", "服务正在启动，请勿重复操作", 409);
     }

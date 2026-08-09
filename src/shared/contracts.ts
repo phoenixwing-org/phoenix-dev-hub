@@ -166,6 +166,8 @@ export interface ServiceDefinition {
   readonly localProjectId?: string;
   readonly configurationSource?: "builtin" | "user";
   readonly configurationOverridden?: boolean;
+  /** 本机配置仍会加载，但存在这些错误时禁止启动并在服务总览中提示。 */
+  readonly configurationErrors?: readonly string[];
   /** version 2 分组元数据；旧版与 User 项目可由 moduleId 自动推导。 */
   readonly seriesId?: string;
   readonly seriesName?: string;
@@ -405,6 +407,8 @@ export interface LogEntry {
 export interface ServiceListResponse {
   readonly services: readonly ServiceRuntimeStatus[];
   readonly generatedAt: string;
+  /** 配置文件整体无法解析时仍启动 Hub，并在前端展示这些错误。 */
+  readonly configurationErrors?: readonly string[];
 }
 
 export interface ServiceLogsResponse {

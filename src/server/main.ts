@@ -6,7 +6,6 @@ import { createApiHandler } from "./api.js";
 import { loadServiceConfiguration } from "./config.js";
 import { PdhAdminPluginWorkspace } from "./PdhAdminPluginWorkspace.js";
 import { PdhBuiltinServiceConfigStore } from "./PdhBuiltinServiceConfig.js";
-import { createPdhControlledToolRuntimeEnvProvider } from "./PdhControlledToolProfileResolver.js";
 import { PdhProjectConfigStore } from "./PdhProjectConfig.js";
 import { PdhServiceManager } from "./PdhServiceManager.js";
 import { PdhSystemTerminal } from "./PdhSystemTerminal.js";
@@ -67,17 +66,10 @@ const adminPluginWorkspace = new PdhAdminPluginWorkspace(projectRoot, {
   adminWebRoot: initialBuiltinDefinitions.find((definition) => definition.id === "admin-web")?.cwd,
   adminNodeRoot: initialBuiltinDefinitions.find((definition) => definition.id === "admin-api")?.cwd,
 });
-const controlledToolRuntimeEnvProvider = createPdhControlledToolRuntimeEnvProvider(() => {
-  const settings = adminPluginWorkspace.settings();
-  return {
-    serviceId: settings.adminApiServiceId,
-    hostRoot: settings.adminWebRoot,
-  };
-});
 const manager = new PdhServiceManager([
   ...initialBuiltinDefinitions,
   ...projectConfig.serviceDefinitions(),
-], new PdhSystemTerminal(), controlledToolRuntimeEnvProvider);
+], new PdhSystemTerminal());
 manager.setConfigurationErrors(loadedServiceConfiguration.configurationErrors ?? []);
 const handleApi = createApiHandler(
   manager,

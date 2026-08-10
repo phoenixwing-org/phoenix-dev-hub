@@ -110,12 +110,8 @@ describe("services.json", () => {
       .toBe(8101);
     expect(services.find((service) => service.id === "admin-api")?.endpoints[0]?.healthUrl)
       .toBe("http://127.0.0.1:8101/index.html");
-    expect(services.find((service) => service.id === "admin-api")?.command.env)
-      .toEqual({
-        PAH_DB_DATABASE: "phoenix_admin_development",
-        PAH_DB_SYNCHRONIZE: "false",
-        PAH_DB_INITIALIZE: "false",
-      });
+    expect(services.find((service) => service.id === "admin-api")?.command)
+      .toEqual({ executable: "pnpm", args: ["dev"] });
     expect(services.filter((service) => service.moduleId === "phoenix-admin")).toHaveLength(4);
     expect(services.filter((service) => service.seriesId === "phoenix-admin")).toHaveLength(4);
     expect(services.find((service) => service.id === "admin-web")).toMatchObject({
@@ -124,10 +120,8 @@ describe("services.json", () => {
       serviceRole: "web",
       runtimeSlot: "phoenix-admin-development",
       startOrder: 20,
-      profilePolicy: {
-        environmentKind: "development",
-        deploymentMode: "source-mounted",
-      },
+      command: { executable: "pnpm", args: ["dev:local"] },
+      profilePolicy: undefined,
     });
     expect(services.find((service) => service.id === "admin-release-web")).toMatchObject({
       profileId: "release-validation",

@@ -13,7 +13,7 @@
             "description": "Cool Admin Vue 前端",
             "command": {
               "executable": "pnpm",
-              "args": ["dev", "--host", "127.0.0.1", "--strictPort"]
+              "args": ["dev:local"]
             },
             "endpoints": [
               {
@@ -29,15 +29,10 @@
           },
           "api": {
             "name": "Phoenix Admin API",
-            "description": "Cool Admin Node / Midway 后端",
+            "description": "仅执行 Admin Node 的 pnpm dev；初始化与插件挂载独立处理",
             "command": {
               "executable": "pnpm",
-              "args": ["dev"],
-              "env": {
-                "PAH_DB_SYNCHRONIZE": "false",
-                "PAH_DB_INITIALIZE": "false",
-                "PAH_DB_DATABASE": "phoenix_admin_development"
-              }
+              "args": ["dev"]
             },
             "endpoints": [
               {
@@ -60,15 +55,6 @@
           "runtimeSlot": "phoenix-admin-development",
           "metadata": {
             "description": "相邻源码工作区 / dev-only"
-          },
-          "policy": {
-            "environmentKind": "development",
-            "deploymentMode": "source-mounted",
-            "database": {
-              "serviceRole": "api",
-              "envName": "PAH_DB_DATABASE",
-              "name": "phoenix_admin_development"
-            }
           },
           "services": {
             "web": {

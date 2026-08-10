@@ -194,6 +194,65 @@ describe("Admin 插件开发工作区", () => {
     expect(updated.recentOperation?.changes.filter((change) => change.action === "replaced-link")).toHaveLength(2);
   });
 
+  it("早期登记缺少 moduleId 时只凭受控旧链接与 marker 恢复并修改目录", () => {
+    const current = fixture();
+    const oldProduct = pluginFixture(current.root, "0.1.0");
+    const added = current.workspace.add(oldProduct);
+    const mounted = current.workspace.mount(added.registration.id);
+    const configPath = path.join(current.hub, ".runtime/admin-plugins.json");
+    const config = JSON.parse(readFileSync(configPath, "utf8")) as {
+      plugins: Array<Record<string, unknown>>;
+    };
+    delete config.plugins[0]!.moduleId;
+    delete config.plugins[0]!.name;
+    delete config.plugins[0]!.manifestVersion;
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+    unlinkSync(mounted.mounts.find((mount) => mount.kind === "node")!.target);
+    rmSync(oldProduct, { recursive: true, force: true });
+
+    const legacy = new PdhAdminPluginWorkspace(current.hub, {
+      adminWebRoot: current.web,
+      adminNodeRoot: current.node,
+    });
+    expect(legacy.status(added.registration.id)).toMatchObject({
+      sourceState: "unavailable",
+      identity: { moduleId: undefined },
+    });
+    const newProduct = pluginFixture(current.root, "0.2.0");
+    const updated = legacy.repoint(added.registration.id, newProduct);
+    expect(updated).toMatchObject({
+      sourceState: "available",
+      mountState: "mounted",
+      identity: { moduleId: "example-admin-plugin", version: "0.2.0" },
+    });
+    expect(updated.recentOperation?.changes.some((change) => change.action === "replaced-link")).toBe(true);
+    expect(updated.recentOperation?.changes.some((change) => change.action === "created-link")).toBe(true);
+  });
+
+  it("早期登记缺少身份且没有任何受控旧链接时拒绝猜测 moduleId", () => {
+    const current = fixture();
+    const oldProduct = pluginFixture(current.root, "0.1.0");
+    const added = current.workspace.add(oldProduct);
+    const mounted = current.workspace.mount(added.registration.id);
+    const configPath = path.join(current.hub, ".runtime/admin-plugins.json");
+    const config = JSON.parse(readFileSync(configPath, "utf8")) as {
+      plugins: Array<Record<string, unknown>>;
+    };
+    delete config.plugins[0]!.moduleId;
+    delete config.plugins[0]!.name;
+    delete config.plugins[0]!.manifestVersion;
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+    for (const mount of mounted.mounts) unlinkSync(mount.target);
+    rmSync(oldProduct, { recursive: true, force: true });
+
+    const legacy = new PdhAdminPluginWorkspace(current.hub, {
+      adminWebRoot: current.web,
+      adminNodeRoot: current.node,
+    });
+    const newProduct = pluginFixture(current.root, "0.2.0");
+    expect(() => legacy.repoint(added.registration.id, newProduct)).toThrow("不会根据登记 ID 猜测模块身份");
+  });
+
   it("重新指向拒绝不同 moduleId、重复登记与第三方链接，且不改原登记", () => {
     const current = fixture();
     const oldProduct = pluginFixture(current.root, "0.1.0");

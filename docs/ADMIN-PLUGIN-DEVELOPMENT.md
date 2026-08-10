@@ -26,9 +26,8 @@ Admin 插件开发工作区是 Phoenix Admin Host 的本机定制开发能力，
 安全展示并核验“重新指向”，不替代对新目录的实时 inspect。已有旧格式登记保持兼容：旧目录
 仍可访问时会从 manifest 取得身份；若旧目录和身份快照都不可用，Hub 会拒绝猜测 moduleId。
 
-工作区设置保存 Admin Vue/Node 根目录、对应服务 ID，以及可选的 PostgreSQL env 文件绝对
-路径。Hub 不读取或返回 env 文件内容，不保存数据库连接串、访问令牌和备份路径。Admin
-访问令牌只存在于当前页面内存，用于 Pah lifecycle 查询和 DDL dry-run，刷新即丢失。
+工作区设置只保存 Admin Vue/Node 根目录和对应服务 ID。日常开发 View 不接收数据库连接、
+访问令牌、备份路径或初始化参数；这些内容由开发者在 Hub 之外处理。
 
 当前数据规模小、配置需要能被人工检查，也不存在多进程并发写入，因此继续使用原子写入的
 JSON。若以后出现大量组合、跨工作区关系和并发事务需求，再迁移 SQLite。
@@ -72,9 +71,9 @@ Hub 不生成产品菜单映射，也不按 Issue、Function、BOM 产品名添�
 它不是 Pah 的业务卸载，不删除产品目录、数据库、迁移台账、菜单或业务数据。损坏、嵌套、
 孤立、未闭合 marker，实体目标和外来链接都会阻止操作；不存在广域删除或按名称清理。
 
-## 更新 / 重新指向工作目录
+## 修改插件开发目录
 
-插件切换到新 Function/worktree 后，详情页“重新指向”通过
+插件切换到新产品目录或 worktree 后，详情页“修改目录”通过
 `PATCH /api/admin-plugins/:id` 更新原登记，不需要先卸载、移除或手工编辑 JSON。流程先对新目录
 执行完整 inspect，并要求新旧 `moduleId` 完全一致；DDL 原始字节 checksum、artifacts 的
 module/version 及 runtime artifact 路径、size/SHA 也必须有效。
@@ -88,20 +87,23 @@ exclude 与登记；若自动回滚本身不完整，API 返回 `ADMIN_PLUGIN_RE
 先停止 Admin Host，再按 details 精确复核，不会把部分成功伪装成完成。
 
 旧产品目录不存在或 manifest 已损坏时，列表仍显示登记身份、旧路径和 `sourceError`，普通开发
-挂载/卸载会 fail-closed；只要登记已有 moduleId 身份快照，仍可选择同模块有效目录恢复。
+挂载/卸载会 fail-closed；登记已有 moduleId 身份快照时可选择同模块有效目录恢复。早期登记没有
+身份快照时，只有至少一个 Host 旧链接仍精确指向旧源码、且 Vue/Node 两端 Git marker 都完全匹配
+新 Manifest 的 moduleId，Hub 才恢复身份并修改目录；否则拒绝根据登记 ID 猜测。
 该动作始终只属于开发装配，不执行 Pah register/install/enable、DDL、数据库、菜单或权限改动。
 
 ## 启动与核验
 
-“启动 Admin Host”按 Admin API → Admin Web 顺序调用现有受控服务管理器。已经运行或由外部
+“启动 Admin Host”按 Admin API → Admin Web 顺序调用现有受控服务管理器。Development API
+只在 Admin Node 根目录执行 `pnpm dev`，不会附加数据库、初始化或测试工具环境。已经运行或由外部
 管理的 Host 不会重复启动；端口冲突继续使用服务管理器原有边界。按钮不会启动插件本身。
 
 “装配核验”输出：
 
-- 每个插件的 source commit、Manifest version、挂载状态和可选 Pah lifecycle；
+- 每个插件的 source commit、Manifest version 与挂载状态；
 - Admin API/Web 的 lifecycle、health、ownership 与端口；
 - Manifest 声明的全部前端路由 HTTP 2xx 结果；
-- DDL 安全策略说明。
+- Manifest 声明摘要。
 
 该结果固定标记为“开发装配核验（非完整 verify）”，不能表示产品迁移完成。Dev Hub 会分别
 列出 Host-owned 与 plugin-owned 的 lint、typecheck、test、build 门禁；未取得真实命令、
@@ -118,28 +120,16 @@ exclude 与登记；若自动回滚本身不完整，API 返回 `ADMIN_PLUGIN_RE
 - `/function-develop/catalog`；
 - `/bom-studio/boms`。
 
-未填写一次性 Admin 令牌时，路由、commit、挂载和 Host 状态仍会核验，Pah lifecycle 明确
-显示为“未查询”，不会伪造成功状态。
-
-## DDL 与 PostgreSQL
-
-包含 DDL 的插件只显示 migration 声明，并通过 Admin Node 的
-`GET /admin/pah/plugin/migration-plan` 请求受控、短时、一次性的 dry-run。Hub 不提供 SQL
-执行接口，不接收 `planId`、制品路径或备份证明，不绕过备份，也不启用 TypeORM
-`synchronize`。实际安装仍由 Admin Node 的受控发布编排完成。
-
-需要多插件专用 PostgreSQL 时，应把连接参数保存在工作区外的本机私有 env 文件，View
-只记录文件路径。不得将连接串、token、备份位置或生产凭据写入仓库配置、导出 JSON、日志
-或提交信息。
+数据库初始化、迁移、seed、Pah register/install/enable 与权限变更都不属于这个开发 View；
+Hub 只负责启动 Host、识别插件、修改开发目录和管理 Vue/Node symlink。
 
 ## 退出与恢复
 
 1. 停止 Admin Host Web/API；
 2. 对每个插件执行“开发卸载”；
 3. 确认两个 Host 的目标 symlink 和 marker 已移除；
-4. 恢复原 PostgreSQL env；
-5. 重新启动稳定 Admin Host；
-6. 再次运行组合核验。
+4. 重新启动稳定 Admin Host；
+5. 再次运行组合核验。
 
 ## 用户点检
 

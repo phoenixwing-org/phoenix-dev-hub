@@ -1,6 +1,8 @@
 # Admin 受控测试工具 Profile（P0）
 
-状态：**Driver 矩阵已关闭、总控已解锁 Provider 实施；当前仍禁止重启 Admin API 或运行产品消费者实证。**
+状态：**历史受控 Provider 已实现；日常 Phoenix Admin Development 启动已解除自动关联。Resolver 仅作为独立底层能力保留。**
+
+当前产品决策：Hub 的 Admin 开发条目只执行 `pnpm dev`；初始化、数据库和测试工具由开发者或其他受控流程处理。
 
 Owner 输入日期：2026-08-03
 

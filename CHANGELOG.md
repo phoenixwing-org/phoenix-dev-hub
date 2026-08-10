@@ -1,5 +1,18 @@
 # 更新日志
 
+## 0.3.2 - 2026-08-10
+
+### 改进
+
+- Phoenix Admin Development 的 API 启动简化为纯 `pnpm dev`，不再自动关联数据库初始化或受控测试工具 Profile。
+- Admin Web 开发联调使用 `pnpm dev:local`（`dev:wing-local` 的便捷别名），本地 Wing 模式由本机服务配置决定。
+- Admin 插件 View 聚焦 Host 启动与开发挂载，提供清晰的“修改目录”入口。
+- 失效旧登记缺少 `moduleId` 时，可通过受控 Host 链接与 Git marker 安全恢复身份并切换源码目录。
+
+### 依赖
+
+- Dev Hub 自身的 Registry 依赖升级并锁定为 `phoenix-wing@0.6.3`。
+
 ## 0.3.1 - 2026-08-09
 
 ### 修复

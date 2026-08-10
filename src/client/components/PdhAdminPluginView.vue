@@ -3,7 +3,6 @@ import { computed, ref, watch } from "vue";
 import type {
   AdminPluginCandidate,
   AdminPluginCatalogResponse,
-  AdminPluginDryRunResponse,
   AdminPluginStatus,
   AdminPluginVerifyResponse,
   AdminPluginWorkspaceSettings,
@@ -23,9 +22,7 @@ const emit = defineEmits<{
 }>();
 
 const busy = ref("");
-const authorization = ref("");
 const verifyResult = ref<AdminPluginVerifyResponse>();
-const dryRunResult = ref<AdminPluginDryRunResponse>();
 const editingSettings = ref(false);
 const settingsDraft = ref<AdminPluginWorkspaceSettings>();
 const repointing = ref(false);
@@ -37,7 +34,6 @@ watch(() => props.catalog?.settings, (settings) => {
   if (settings && !editingSettings.value) settingsDraft.value = { ...settings };
 }, { immediate: true, deep: true });
 watch(() => props.selectedId, () => {
-  dryRunResult.value = undefined;
   repointing.value = false;
   repointDirectory.value = "";
   repointCandidate.value = undefined;
@@ -84,9 +80,10 @@ async function inspectRepoint(): Promise<void> {
 async function repoint(): Promise<void> {
   if (!selected.value || !repointCandidate.value || busy.value) return;
   const oldModuleId = selected.value.identity.moduleId;
-  if (!oldModuleId || repointCandidate.value.manifest.moduleId !== oldModuleId) return;
+  if (oldModuleId && repointCandidate.value.manifest.moduleId !== oldModuleId) return;
+  const targetModuleId = oldModuleId ?? repointCandidate.value.manifest.moduleId;
   if (!window.confirm(
-    `将 ${oldModuleId} 重新指向：\n${repointCandidate.value.productRoot}\n\nHub 只更新开发登记、Vue/Node symlink 与 Git exclude；不会执行 Pah register/install/enable、DDL、数据库或权限改动。`,
+    `将 ${targetModuleId} 的开发目录修改为：\n${repointCandidate.value.productRoot}\n\nHub 会复核旧登记身份，只更新开发登记、Vue/Node symlink 与 Git exclude；不会执行初始化、DDL、数据库或权限改动。`,
   )) return;
   busy.value = "repoint";
   try {
@@ -119,19 +116,7 @@ async function verify(): Promise<void> {
   if (busy.value) return;
   busy.value = "verify";
   try {
-    verifyResult.value = await devHubApi.verifyAdminPlugins(authorization.value || undefined);
-  } catch (error) {
-    emit("error", error);
-  } finally {
-    busy.value = "";
-  }
-}
-
-async function dryRun(): Promise<void> {
-  if (!selected.value || !authorization.value || busy.value) return;
-  busy.value = "dry-run";
-  try {
-    dryRunResult.value = await devHubApi.adminPluginDdlDryRun(selected.value.registration.id, authorization.value);
+    verifyResult.value = await devHubApi.verifyAdminPlugins();
   } catch (error) {
     emit("error", error);
   } finally {
@@ -188,7 +173,7 @@ async function saveSettings(): Promise<void> {
         <div class="plugin-actions">
           <button type="button" :disabled="!!busy || !selected.candidate || selected.mountState === 'mounted' || !selected.candidate.mountAllowed" @click="perform(selected.registration.id, 'mount')">开发挂载</button>
           <button type="button" :disabled="!!busy || !selected.candidate || selected.mountState === 'unmounted'" @click="perform(selected.registration.id, 'unmount')">开发卸载</button>
-          <button type="button" :disabled="!!busy" @click="repointing = !repointing">{{ repointing ? '取消重新指向' : '重新指向' }}</button>
+          <button type="button" :disabled="!!busy" @click="repointing = !repointing">{{ repointing ? '取消修改目录' : '修改目录' }}</button>
           <button type="button" class="danger" :disabled="!!busy || selected.mountState !== 'unmounted'" @click="perform(selected.registration.id, 'remove')">移除列表</button>
         </div>
       </section>
@@ -196,21 +181,21 @@ async function saveSettings(): Promise<void> {
       <section v-if="selected.sourceState === 'unavailable'" class="panel source-unavailable" role="status">
         <strong>已登记的旧目录不可用</strong>
         <p>{{ selected.sourceError?.message }}</p>
-        <small>登记仍保留；开发挂载/卸载已阻止。可使用“重新指向”选择同一 moduleId 的有效 worktree。</small>
+        <small>登记仍保留；开发挂载/卸载已阻止。可使用“修改目录”选择同一 moduleId 的有效开发目录。</small>
       </section>
 
       <section v-if="repointing" class="panel repoint-panel">
-        <div class="section-title"><div><h3>更新已登记工作目录</h3><p>先检查新目录；后端会再次权威校验并以事务方式更新两端链接。</p></div></div>
+        <div class="section-title"><div><h3>修改插件开发目录</h3><p>先检查新目录；后端会再次权威校验并以事务方式更新两端链接。</p></div></div>
         <div class="repoint-form">
           <label><span>新的产品或 admin-plugin 目录</span><input v-model="repointDirectory" type="text" placeholder="/本机/新的 Function worktree" @keyup.enter="inspectRepoint"></label>
           <div class="repoint-actions">
             <button type="button" :disabled="!!busy || !repointDirectory.trim()" @click="inspectRepoint">{{ busy === 'inspect-repoint' ? '检查中…' : '检查新目录' }}</button>
-            <button type="button" class="primary" :disabled="!!busy || !repointCandidate || !selected.identity.moduleId || repointCandidate.manifest.moduleId !== selected.identity.moduleId || !repointCandidate.mountAllowed" @click="repoint">确认重新指向</button>
+            <button type="button" class="primary" :disabled="!!busy || !repointCandidate || Boolean(selected.identity.moduleId && repointCandidate.manifest.moduleId !== selected.identity.moduleId) || !repointCandidate.mountAllowed" @click="repoint">确认修改目录</button>
           </div>
           <div v-if="repointCandidate" class="repoint-candidate">
             <strong>{{ repointCandidate.manifest.name }} · {{ repointCandidate.manifest.version }}</strong>
             <code>{{ repointCandidate.manifest.moduleId }}</code>
-            <span :class="{ warning: repointCandidate.manifest.moduleId !== selected.identity.moduleId }">{{ repointCandidate.manifest.moduleId === selected.identity.moduleId ? 'moduleId 一致；可校验旧链接或认领已指向此目录的链接' : `moduleId 不一致；已登记 ${selected.identity.moduleId || '未知'}` }}</span>
+            <span :class="{ warning: Boolean(selected.identity.moduleId && repointCandidate.manifest.moduleId !== selected.identity.moduleId) }">{{ !selected.identity.moduleId ? '旧登记未保存 moduleId；后端将通过现有 Host 链接和 Git marker 复核身份' : repointCandidate.manifest.moduleId === selected.identity.moduleId ? 'moduleId 一致；可校验旧链接或认领已指向此目录的链接' : `moduleId 不一致；已登记 ${selected.identity.moduleId}` }}</span>
             <small>{{ repointCandidate.productRoot }}</small>
             <small v-for="warning in repointCandidate.validationWarnings" :key="warning" class="warning">{{ warning }}</small>
           </div>
@@ -248,7 +233,7 @@ async function saveSettings(): Promise<void> {
         </ul>
       </section>
 
-      <section v-if="selected.candidate" class="two-column">
+      <section v-if="selected.candidate">
         <article class="panel">
           <div class="section-title"><div><h3>Manifest 与路由</h3><p>导航固定由 manifest + Pah lifecycle 物化。</p></div></div>
           <dl class="facts">
@@ -258,13 +243,6 @@ async function saveSettings(): Promise<void> {
             <div><dt>Artifacts</dt><dd><code>{{ selected.candidate.artifactsPath || '尚未生成' }}</code></dd></div>
           </dl>
           <ul class="route-list"><li v-for="route in selected.candidate.manifest.routes" :key="route.id"><code>{{ route.path }}</code><span>{{ route.title }}</span></li></ul>
-        </article>
-        <article class="panel">
-          <div class="section-title"><div><h3>Host 与一次性认证</h3><p>令牌只保存在当前页面内存，不写入 JSON、日志或 Git。</p></div></div>
-          <label class="token-field"><span>Admin 访问令牌（可选）</span><input v-model="authorization" type="password" autocomplete="off" placeholder="核验 lifecycle / DDL dry-run 时使用"></label>
-          <p class="policy">DDL 插件只能请求 Admin Node 的只读 dry-run；Hub 不执行 SQL、不接收 planId 或备份证明，也不启用 synchronize。</p>
-          <button v-if="selected.candidate.manifest.migrations.length" type="button" :disabled="!!busy || !authorization" @click="dryRun">生成 / 刷新 DDL dry-run</button>
-          <pre v-if="dryRunResult">{{ JSON.stringify(dryRunResult.plan, null, 2) }}</pre>
         </article>
       </section>
     </template>
@@ -304,10 +282,9 @@ async function saveSettings(): Promise<void> {
         <label><span>Admin Vue 根目录</span><input v-model="settingsDraft.adminWebRoot" :readonly="!editingSettings"></label>
         <label><span>Admin Node 根目录</span><input v-model="settingsDraft.adminNodeRoot" :readonly="!editingSettings"></label>
         <label><span>Web / API 服务 ID</span><div class="inline"><input v-model="settingsDraft.adminWebServiceId" :readonly="!editingSettings"><input v-model="settingsDraft.adminApiServiceId" :readonly="!editingSettings"></div></label>
-        <label><span>专用 PostgreSQL env 文件（可选，仅保存路径）</span><input v-model="settingsDraft.postgresEnvFile" :readonly="!editingSettings" placeholder="/private/path/admin-plugin-dev.env"></label>
       </div>
       <div v-if="editingSettings" class="settings-actions"><button type="button" class="primary" :disabled="!!busy" @click="saveSettings">保存本机设置</button></div>
-      <p class="recovery">退出 / 恢复：先停止 Admin Host → 对每个插件执行“开发卸载” → 恢复原 PostgreSQL env → 再启动稳定 Host。Hub 不读取连接串内容，也不会自动迁移或清库。</p>
+      <p class="recovery">退出 / 恢复：先停止 Admin Host → 对每个插件执行“开发卸载” → 再启动稳定 Host。数据库初始化与迁移由开发者在 Hub 之外处理。</p>
     </section>
   </main>
 </template>

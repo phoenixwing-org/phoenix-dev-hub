@@ -540,16 +540,18 @@ export class PdhAdminPluginWorkspace {
     const registration = this.#registration(id);
     let oldCandidate: AdminPluginCandidate | undefined;
     try { oldCandidate = this.#inspectRegistration(registration); } catch { /* stable snapshot may be sufficient */ }
-    const registeredModuleId = registration.moduleId ?? oldCandidate?.manifest.moduleId;
+    const candidate = this.inspect(directory);
+    const registeredModuleId = registration.moduleId
+      ?? oldCandidate?.manifest.moduleId
+      ?? this.#recoverLegacyModuleId(registration, candidate.manifest.moduleId);
     if (!registeredModuleId) {
       return fail(
         "ADMIN_PLUGIN_IDENTITY_UNAVAILABLE",
-        "旧登记没有 moduleId 身份快照且原目录不可用；请先恢复旧目录后重试，Hub 不会根据登记 ID 猜测模块身份",
+        "旧登记没有 moduleId 身份快照，且现有 Host 链接不足以证明新目录属于同一模块；Hub 不会根据登记 ID 猜测模块身份",
         409,
       );
     }
 
-    const candidate = this.inspect(directory);
     if (candidate.manifest.moduleId !== registeredModuleId) {
       return fail(
         "ADMIN_PLUGIN_MODULE_ID_MISMATCH",
@@ -710,6 +712,32 @@ export class PdhAdminPluginWorkspace {
       throw error;
     }
     return this.status(id);
+  }
+
+  /**
+   * 早期登记没有保存 moduleId。只有 Host 中至少一个旧链接仍精确指向该登记的旧源码，
+   * 且 Vue/Node 两端 Git exclude marker 都与候选 moduleId 完全一致时，才允许恢复身份。
+   */
+  #recoverLegacyModuleId(registration: AdminPluginRegistration, candidateModuleId: string): string | undefined {
+    const targets = this.#registrationMountTargets(registration, candidateModuleId);
+    let ownedLinkCount = 0;
+    for (const target of targets) {
+      const link = this.#rawLinkState(target.target);
+      if (link.state === "occupied") return undefined;
+      if (link.state === "link") {
+        const actual = path.resolve(path.dirname(target.target), link.value!);
+        if (actual !== target.source) return undefined;
+        ownedLinkCount += 1;
+      }
+      const excludePath = this.#gitPath(target.hostRoot, "info/exclude");
+      const parsed = this.#parseExclude(candidateModuleId, readOptionalFile(excludePath));
+      if (
+        parsed.blocks.length !== 1
+        || parsed.blocks[0]?.length !== 1
+        || parsed.blocks[0]?.[0] !== this.#excludePattern(target)
+      ) return undefined;
+    }
+    return ownedLinkCount > 0 ? candidateModuleId : undefined;
   }
 
   mount(id: string): AdminPluginStatus {

@@ -1,12 +1,12 @@
 # Phoenix Dev Hub
 
-当前版本：**0.3.1**
+当前版本：**0.3.2**
 
 Phoenix Dev Hub 是 Phoenix 工作区内开发服务的本机控制台。它用一个 Node 进程、一个端口同时提供 Web 工作台和控制 API，不再要求记住每个仓库的启动命令与端口。
 
 ```text
 http://127.0.0.1:42100
-├─ Wing 0.6.0 Web 工作台
+├─ Wing 0.6.3 Web 工作台
 ├─ /api/services：探测、启动、停止、重启
 ├─ /api/services/:id/logs：按 generation/cursor 增量读取最近日志
 ├─ /api/services/:id/terminal：打开本机系统终端
@@ -41,7 +41,7 @@ http://127.0.0.1:42100
 - 默认服务、User 项目可单项或整套导出；整套格式为 version 2，单服务兼容导出和旧配置导入仍支持 version 1，所有导入都会重新经过后端安全校验。
 - “系统 → Admin 工具 → Admin 插件”提供独立 Wing View：选择本机产品目录、识别 Admin Plugin Manifest v2、管理 Vue/Node 开发 symlink、展示 Git exclude 与操作明细，并统一启动/核验 Admin Host。插件不会被伪装成可启动网站；详见 [`docs/ADMIN-PLUGIN-DEVELOPMENT.md`](docs/ADMIN-PLUGIN-DEVELOPMENT.md)。
 - Admin 插件的“装配核验”只报告 source commit、manifest、挂载、Host lifecycle 与路由，不冒充完整产品 verify。结果分别列出尚未记录/运行的 Host-owned 与 plugin-owned lint/typecheck/test/build；`.git/info/exclude` 只影响 Git，不是工具扫描边界。
-- Hub-owned Admin API 启动前会从 Admin Web root 只读解析锁定的 `vitest@3.2.7`，以保留环境 JSON 注入 realpath、lock integrity、entrypoint/package SHA。解析不搜索 `PATH`、不运行 package runner、不联网；缺失或损坏时注入 `unavailable` 原因但不阻止 API 诊断启动。外部 Node 不会收到 Hub Profile。
+- Phoenix Admin Development 的 API 条目只在 Admin Node 目录执行 `pnpm dev`。Hub 不为日常开发启动注入数据库、初始化或测试工具 Profile；插件源码由独立的“Admin 插件”View 选择、修改目录和挂载。
 
 示例清单只保留 Phoenix Admin 开发联调、基于独立 Git worktree 的发布验收，以及旧独立 Open Issue 网站。它可以包含公开、可复核的示例 commit 与包 SHA，但不携带任何使用者的绝对路径、真实数据库、凭据或私有运行状态。Function、BOM、DeskTools 等实际项目由使用者写入自己的 `services.user.json` 或通过设置 View 管理。
 
@@ -56,10 +56,10 @@ http://127.0.0.1:42100
 - [Admin 系列多环境 Profile 点检](docs/TASK-ADMIN-MULTI-PROFILE.md)
 - [后续任务清单](TODO.md)
 
-## Wing 0.6.0 依赖策略
+## Wing 0.6.3 依赖策略
 
 Dev Hub 正式依赖只声明并锁定 npm Registry 的精确版本
-`phoenix-wing@0.6.0`。默认开发、类型检查、测试与构建均从安装后的 Registry 包
+`phoenix-wing@0.6.3`。默认开发、类型检查、测试与构建均从安装后的 Registry 包
 解析，不自动跟随相邻 Wing 仓库，开发者需要升级时必须主动修改精确版本并重新验证。
 Hub 不提供 Wing 本地源码模式；开发服务器、测试与生产构建均只从 Registry 包
 解析。不得使用 `link:`、`file:`、`workspace:`、override 或相邻源码回退。
@@ -144,9 +144,14 @@ version 2，同时包含 Series/Profile 默认服务、隐藏状态和 User 项�
 可能包含本机绝对路径或环境身份，均受 Git 忽略，不得提交。它们不属于发布包备份范围；
 需要迁移工作台时，由使用者在受控位置自行备份并点检其中的路径。
 
-Phoenix Admin API 的 sample 命令固定带 `PAH_DB_SYNCHRONIZE=false` 和
-`PAH_DB_INITIALIZE=false`。真实数据库名、Host commit、包 SHA、Registry integrity 与路径只允许进入
-`services.user.json` 或 `.runtime` 本机配置；连接串、token、密码和备份路径不得进入 Git。Hub 不自动执行 DDL。
+Phoenix Admin Development 的 sample 命令保持为纯 `pnpm dev`，数据库初始化、seed、迁移和插件生命周期
+由开发者在 Hub 之外处理。发布验收若需要数据库安全门禁，应使用独立 Profile；真实数据库名、Host commit、
+包 SHA、Registry integrity 与路径只允许进入 `services.user.json` 或 `.runtime` 本机配置，连接串、token、
+密码和备份路径不得进入 Git。
+
+Admin 开发联调中，Web 使用 `pnpm dev:local` 消费相邻本地 Wing；它是 Admin 提供的
+`dev:wing-local` 便捷别名。API 仍使用普通 `pnpm dev`。这不改变 Dev Hub 自身对 Registry
+Wing 0.6.3 的锁定。
 
 发布验收管理员重置是独立、操作员显式执行的本机工具，不是普通 start 的副作用：
 
@@ -158,9 +163,7 @@ pnpm admin:release:reset -- --profile release-validation --username admin
 `0600`，密码在交互终端输入且不回显。工具先调用 Admin Node 的受控 plan，再执行精确重置；不会在日志、
 API 或 Git 中写出密码。
 
-Admin API 的受控测试工具使用保留键 `PHOENIX_DEV_HUB_CONTROLLED_TOOL_PROFILE`。该键不接受
-默认清单、本机覆盖或父进程同名值；`PdhServiceManager` 在 `process.env` 与 `command.env` 之后
-注入 Hub 内部结果。精确 JSON schema、哈希口径、unavailable 原因及消费者门禁见
+受控测试工具 Resolver 仍保留为独立底层能力，但不再自动关联日常 Admin API 启动条目。历史设计与安全边界见
 [`docs/TASK-CONTROLLED-TOOL-PROFILE.md`](docs/TASK-CONTROLLED-TOOL-PROFILE.md)。
 
 ## API

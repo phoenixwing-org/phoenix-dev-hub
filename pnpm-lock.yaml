@@ -15,8 +15,8 @@ importers:
         specifier: 8.22.0
         version: 8.22.0
       phoenix-wing:
-        specifier: 0.6.3
-        version: 0.6.3(element-plus@2.14.2(vue@3.5.39(typescript@5.9.3)))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3))
+        specifier: 0.6.4
+        version: 0.6.4(element-plus@2.14.2(vue@3.5.39(typescript@5.9.3)))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3))
       pinia:
         specifier: 3.0.4
         version: 3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3))
@@ -888,8 +888,8 @@ packages:
   pgpass@1.0.5:
     resolution: {integrity: sha512-FdW9r/jQZhSeohs1Z3sI1yxFQNFvMcnmfuj4WBMUTxOrAyLMaTcE1aAMBiTlbMNaXvBCQuVi0R7hd8udDSP7ug==}
 
-  phoenix-wing@0.6.3:
-    resolution: {integrity: sha512-Ufbp3WsWe81R2rpC72Dm/fEV97h0bgtj9sgPN/08XeAXfU2krh7IInuaBTDr6ZFwN9qidU/pX4gfr7SrLJNX1Q==}
+  phoenix-wing@0.6.4:
+    resolution: {integrity: sha512-XonR77TFG0bbkE6Ke2yk/ur6R8RDWOpL/moXbqFLsEj8+Hg0PWh1o+p3IAc8bn3djsY4ML4y/0d/FlO/Iw7M5w==}
     peerDependencies:
       element-plus: ^2.0.0
       pinia: ^2.0.0 || ^3.0.0
@@ -1815,7 +1815,7 @@ snapshots:
     dependencies:
       split2: 4.2.0
 
-  phoenix-wing@0.6.3(element-plus@2.14.2(vue@3.5.39(typescript@5.9.3)))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3)):
+  phoenix-wing@0.6.4(element-plus@2.14.2(vue@3.5.39(typescript@5.9.3)))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3)):
     dependencies:
       '@phoenix-wing/code-core': 0.6.3
       '@phoenix-wing/db-node': 0.6.3

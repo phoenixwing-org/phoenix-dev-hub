@@ -6,7 +6,7 @@ Phoenix Dev Hub 是 Phoenix 工作区内开发服务的本机控制台。它用�
 
 ```text
 http://127.0.0.1:42100
-├─ Wing 0.6.3 Web 工作台
+├─ Wing 0.6.4 Web 工作台
 ├─ /api/services：探测、启动、停止、重启
 ├─ /api/services/:id/logs：按 generation/cursor 增量读取最近日志
 ├─ /api/services/:id/terminal：打开本机系统终端
@@ -56,10 +56,10 @@ http://127.0.0.1:42100
 - [Admin 系列多环境 Profile 点检](docs/TASK-ADMIN-MULTI-PROFILE.md)
 - [后续任务清单](TODO.md)
 
-## Wing 0.6.3 依赖策略
+## Wing 0.6.4 依赖策略
 
 Dev Hub 正式依赖只声明并锁定 npm Registry 的精确版本
-`phoenix-wing@0.6.3`。默认开发、类型检查、测试与构建均从安装后的 Registry 包
+`phoenix-wing@0.6.4`。默认开发、类型检查、测试与构建均从安装后的 Registry 包
 解析，不自动跟随相邻 Wing 仓库，开发者需要升级时必须主动修改精确版本并重新验证。
 Hub 不提供 Wing 本地源码模式；开发服务器、测试与生产构建均只从 Registry 包
 解析。不得使用 `link:`、`file:`、`workspace:`、override 或相邻源码回退。
@@ -174,7 +174,7 @@ Phoenix Admin Development 的 sample 命令保持为纯 `pnpm dev`，数据库�
 
 Admin 开发联调中，Web 使用 `pnpm dev:local` 消费相邻本地 Wing；它是 Admin 提供的
 `dev:wing-local` 便捷别名。API 仍使用普通 `pnpm dev`。这不改变 Dev Hub 自身对 Registry
-Wing 0.6.3 的锁定。
+Wing 0.6.4 的锁定。
 
 发布验收管理员重置是独立、操作员显式执行的本机工具，不是普通 start 的副作用：
 

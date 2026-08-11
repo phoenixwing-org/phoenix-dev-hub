@@ -74,6 +74,35 @@ const availableCandidates = computed(
   () => catalog.value?.candidates.filter((item) => !item.configured) ?? [],
 );
 const formTitle = computed(() => editingProjectId.value ? "编辑 Node.js 项目" : "添加 Node.js 项目");
+const viewTitle = computed(() => {
+  if (view.value === "list") return "服务设置";
+  if (view.value === "import") return "导入服务配置";
+  if (view.value === "series") return "编辑产品系列";
+  if (view.value === "service") return "编辑默认服务";
+  return formTitle.value;
+});
+const viewSubtitle = computed(() => {
+  if (view.value === "list") return "管理产品系列、默认服务与 User 项目";
+  if (view.value === "import") return "校验并合并本机 JSON 配置";
+  if (view.value === "series") return "编辑模板、版本实例与服务覆盖项";
+  if (view.value === "service") return "修改当前机器使用的默认服务覆盖";
+  return editingProjectId.value ? "修改本机 Node.js 项目的显示名称与启动脚本" : "从本地目录加入受控启动列表";
+});
+const subviewPrimaryLabel = computed(() => {
+  if (saving.value) return view.value === "import" ? "导入中…" : "保存中…";
+  if (view.value === "form") return editingProjectId.value ? "保存修改" : "加入启动列表";
+  if (view.value === "service") return "保存本机覆盖";
+  if (view.value === "series") return "保存系列配置";
+  return "校验并合并";
+});
+const subviewPrimaryDisabled = computed(() => {
+  if (saving.value) return true;
+  if (view.value === "form") return !candidate.value || !script.value || !displayName.value.trim();
+  if (view.value === "service") return !serviceJson.value.trim();
+  if (view.value === "series") return Boolean(editorError.value) || !seriesFormName.value.trim();
+  if (view.value === "import") return !importDocument.value;
+  return true;
+});
 const effectiveEditorJson = computed(() => {
   if (view.value === "series") {
     const entry = builtinSeries.value.find((item) => item.id === editingSeriesId.value);
@@ -595,6 +624,13 @@ async function importProjects(): Promise<void> {
   }
 }
 
+async function submitSubview(): Promise<void> {
+  if (view.value === "form") await saveProject();
+  else if (view.value === "service") await saveBuiltinService();
+  else if (view.value === "series") await saveBuiltinSeries();
+  else if (view.value === "import") await importProjects();
+}
+
 watch(
   () => props.open,
   (open) => {
@@ -607,37 +643,35 @@ watch(
 <template>
   <div
     v-if="open"
-    :class="embedded ? ['settings-view', { 'has-subview': view !== 'list' }] : 'dialog-backdrop'"
+    :class="embedded ? 'settings-view' : 'dialog-backdrop'"
     role="presentation"
     @mousedown.self="dismissSubview"
   >
     <section
       :class="['project-dialog', { embedded, subview: embedded && view !== 'list' }]"
-      :role="embedded && view === 'list' ? 'region' : 'dialog'"
-      :aria-modal="embedded && view === 'list' ? undefined : 'true'"
-      :aria-label="embedded && view === 'list' ? '服务设置' : undefined"
-      :aria-labelledby="embedded && view === 'list' ? undefined : 'project-dialog-title'"
+      :role="embedded ? 'region' : 'dialog'"
+      :aria-modal="embedded ? undefined : 'true'"
+      :aria-label="viewTitle"
     >
       <PnwPageHeader
-        v-if="embedded && view === 'list'"
-        title="服务设置"
-        subtitle="管理产品系列、默认服务与 User 项目"
-      />
-      <header v-else class="dialog-header">
-        <div>
-          <p>LOCAL SERVICE CONFIG</p>
-          <h2 id="project-dialog-title">
-            {{ view === 'list' ? '服务配置' : view === 'import' ? '导入服务配置' : view === 'series' ? '编辑产品系列' : view === 'service' ? '编辑默认服务' : formTitle }}
-          </h2>
-        </div>
-        <button
-          v-if="!embedded || view !== 'list'"
-          type="button"
-          class="icon-button"
-          :aria-label="embedded ? '返回服务配置' : '关闭'"
-          @click="dismissSubview"
-        >×</button>
-      </header>
+        :title="viewTitle"
+        :subtitle="viewSubtitle"
+      >
+        <template #actions>
+          <div class="dialog-header-actions">
+            <template v-if="view !== 'list'">
+              <button type="button" @click="showList">返回</button>
+              <button
+                type="button"
+                class="primary"
+                :disabled="subviewPrimaryDisabled"
+                @click="submitSubview"
+              >{{ subviewPrimaryLabel }}</button>
+            </template>
+            <button v-else-if="!embedded" type="button" @click="emit('close')">完成</button>
+          </div>
+        </template>
+      </PnwPageHeader>
 
       <div v-if="view === 'list'" class="dialog-content project-list-view">
         <div class="management-toolbar">
@@ -808,7 +842,7 @@ watch(
         </p>
       </div>
 
-      <div v-else-if="view === 'form'" class="dialog-content">
+      <div v-else-if="view === 'form'" class="dialog-content editor-view project-editor">
         <label v-if="!editingProjectId">
           <span>Hub 同级项目</span>
           <select
@@ -864,7 +898,7 @@ watch(
         </p>
       </div>
 
-      <div v-else-if="view === 'service' || view === 'series'" class="dialog-content service-editor">
+      <div v-else-if="view === 'service' || view === 'series'" class="dialog-content editor-view service-editor">
         <nav class="editor-tabs" aria-label="配置编辑方式">
           <button
             v-for="tab in ([['form', '表单'], ['json', 'JSON'], ['effective', '最终配置']] as const)"
@@ -965,7 +999,7 @@ watch(
         </p>
       </div>
 
-      <div v-else class="dialog-content import-view">
+      <div v-else class="dialog-content editor-view import-view">
         <label class="file-picker">
           <span>选择 JSON 文件</span>
           <input type="file" accept="application/json,.json" @change="selectImportFile">
@@ -983,48 +1017,6 @@ watch(
         </p>
       </div>
 
-      <footer v-if="view !== 'list' || !embedded">
-        <button v-if="view === 'list' && !embedded" type="button" @click="emit('close')">完成</button>
-        <template v-else>
-          <button type="button" @click="showList">返回</button>
-          <button
-            v-if="view === 'form'"
-            type="button"
-            class="primary"
-            :disabled="saving || !candidate || !script || !displayName.trim()"
-            @click="saveProject"
-          >
-            {{ saving ? '保存中…' : editingProjectId ? '保存修改' : '加入启动列表' }}
-          </button>
-          <button
-            v-else-if="view === 'service'"
-            type="button"
-            class="primary"
-            :disabled="saving || !serviceJson.trim()"
-            @click="saveBuiltinService"
-          >
-            {{ saving ? '保存中…' : '保存本机覆盖' }}
-          </button>
-          <button
-            v-else-if="view === 'series'"
-            type="button"
-            class="primary"
-            :disabled="saving || Boolean(editorError) || !seriesFormName.trim()"
-            @click="saveBuiltinSeries"
-          >
-            {{ saving ? '保存中…' : '保存系列配置' }}
-          </button>
-          <button
-            v-else
-            type="button"
-            class="primary"
-            :disabled="saving || !importDocument"
-            @click="importProjects"
-          >
-            {{ saving ? '导入中…' : '校验并合并' }}
-          </button>
-        </template>
-      </footer>
     </section>
   </div>
 </template>
@@ -1032,16 +1024,16 @@ watch(
 <style scoped>
 .dialog-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(15, 23, 42, .42); backdrop-filter: blur(2px); }
 .settings-view { width: 100%; height: 100%; min-height: 0; padding: 0; box-sizing: border-box; overflow: hidden; background: var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, #f8fafc)); }
-.settings-view.has-subview { height: 100%; min-height: 0; display: grid; place-items: center; overflow: hidden; padding: 12px; background: rgba(15, 23, 42, .32); backdrop-filter: blur(2px); }
 .project-dialog { width: min(760px, 100%); max-height: min(820px, calc(100vh - 48px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 14px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); box-shadow: 0 24px 80px rgba(15, 23, 42, .28); }
 .project-dialog.embedded { width: 100%; height: 100%; max-height: none; min-height: 0; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
-.project-dialog.embedded.subview { width: min(720px, 100%); max-height: 100%; min-height: 0; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 14px; box-shadow: 0 24px 80px rgba(0, 0, 0, .35); }
-.dialog-header, .project-dialog > footer, .profile-form-list article > header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.dialog-header, .project-dialog > footer { padding: 14px 18px; }
-.dialog-header { border-bottom: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
-.dialog-header p { margin: 0 0 3px; color: #2563eb; font-size: 9px; font-weight: 800; letter-spacing: .15em; }
+.project-dialog.embedded.subview { width: 100%; height: 100%; max-height: none; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
+.profile-form-list article > header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dialog-header-actions { display: flex; align-items: center; gap: 6px; }
+.dialog-header-actions button { min-height: 30px; padding: 4px 10px; }
 h2 { margin: 0; font-size: 18px; }
-.dialog-content { min-height: 0; display: grid; gap: 14px; overflow-y: auto; padding: 18px; }
+.dialog-content { min-height: 0; flex: 1 1 auto; display: grid; gap: 14px; overflow-y: auto; padding: 18px; box-sizing: border-box; }
+.dialog-content.editor-view { width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: 20px 0 36px; }
+.project-dialog:not(.embedded) .dialog-content.editor-view { width: 100%; margin: 0; padding: 18px; }
 .project-list-view, .import-view, .service-editor { align-content: start; }
 .editor-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
 .editor-tabs button { min-height: 32px; padding: 0 13px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); cursor: pointer; }
@@ -1073,7 +1065,6 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 button.primary { border-color: #2563eb; background: #2563eb; color: #fff; }
 button.danger { border-color: rgba(239, 68, 68, .42); color: #ef4444; }
 button.restore { border-color: rgba(34, 197, 94, .4); color: #22c55e; }
-.icon-button { min-width: 34px; padding: 0; border: 0; background: transparent; font-size: 22px; }
 .management-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .management-toolbar .compact { min-height: 30px; padding: 4px 10px; }
 .directory-row { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
@@ -1108,6 +1099,5 @@ button.restore { border-color: rgba(34, 197, 94, .4); color: #22c55e; }
 .warning-note { border-left-color: #f59e0b; background: rgba(245, 158, 11, .08); }
 .file-picker { padding: 18px; border: 1px dashed var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); border-radius: 9px; text-align: center; }
 .file-picker input { padding: 7px; }
-footer { justify-content: flex-end; border-top: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
-@media (max-width: 620px) { .configured-projects li, .delete-confirm, .reset-confirm { align-items: stretch; flex-direction: column; } .project-actions { align-self: flex-end; } }
+@media (max-width: 620px) { .dialog-content.editor-view { width: calc(100% - 20px); padding-top: 12px; } .configured-projects li, .delete-confirm, .reset-confirm { align-items: stretch; flex-direction: column; } .project-actions { align-self: flex-end; } }
 </style>

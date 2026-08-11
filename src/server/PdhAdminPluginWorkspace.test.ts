@@ -339,4 +339,42 @@ describe("Admin 插件开发工作区", () => {
     expect(content).toContain("private-admin-plugin.env");
     expect(content).not.toContain("postgres://");
   });
+
+  it("sample 风格相对路径按 Hub 根目录解析，登记后仍需显式开发挂载", () => {
+    const current = fixture();
+    const product = pluginFixture(current.root);
+    const configPath = path.join(current.hub, ".runtime/admin-plugins.json");
+    mkdirSync(path.dirname(configPath), { recursive: true });
+    writeFileSync(configPath, JSON.stringify({
+      sampleNotice: "fixture",
+      version: 1,
+      settings: {
+        adminWebRoot: path.relative(current.hub, current.web),
+        adminNodeRoot: path.relative(current.hub, current.node),
+        adminWebServiceId: "admin-web",
+        adminApiServiceId: "admin-api",
+      },
+      plugins: [{
+        id: "example-admin-plugin-local",
+        productRoot: path.relative(current.hub, product),
+        manifestPath: "packages/admin-plugin/manifest.json",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        moduleId: "example-admin-plugin",
+        name: "Example Admin Plugin",
+      }],
+    }, null, 2));
+
+    const workspace = new PdhAdminPluginWorkspace(current.hub);
+    expect(workspace.settings()).toMatchObject({
+      adminWebRoot: realpathSync(current.web),
+      adminNodeRoot: realpathSync(current.node),
+    });
+    const plugin = workspace.status("example-admin-plugin-local");
+    expect(plugin).toMatchObject({
+      sourceState: "available",
+      mountState: "unmounted",
+      registration: { productRoot: realpathSync(product) },
+    });
+    expect(plugin.mounts.every((mount) => mount.linkState === "missing")).toBe(true);
+  });
 });

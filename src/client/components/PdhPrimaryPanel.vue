@@ -1,13 +1,18 @@
 <script setup lang="ts">
+import PnwPrimaryPanel from "phoenix-wing/layout/PnwPrimaryPanel.vue";
+import PnwPrimarySection from "phoenix-wing/layout/PnwPrimarySection.vue";
 import type { ServiceRuntimeStatus } from "@shared/contracts";
 import PdhPropertiesPanel from "./PdhPropertiesPanel.vue";
 
 defineOptions({ name: "PdhPrimaryPanel" });
-defineProps<{
+withDefaults(defineProps<{
+  title?: string;
   services: readonly ServiceRuntimeStatus[];
   activeModule: string;
   selectedService?: ServiceRuntimeStatus;
-}>();
+}>(), {
+  title: "服务进程",
+});
 
 const emit = defineEmits<{
   filter: [moduleId: string];
@@ -27,12 +32,12 @@ function websiteModules(services: readonly ServiceRuntimeStatus[]) {
 </script>
 
 <template>
-  <aside class="primary-panel">
-    <details class="primary-block" open>
-      <summary class="block-title">
-        <span>网站模块</span><i aria-hidden="true">›</i>
-      </summary>
-      <div class="block-body module-list">
+  <PnwPrimaryPanel class="primary-panel" :title="title" :aria-label="`${title}导航与属性`">
+    <template #summary>{{ services.length }} 个服务</template>
+
+    <PnwPrimarySection title="网站模块">
+      <template #suffix>{{ websiteModules(services).length }}</template>
+      <div class="section-body module-list">
         <button :class="{ active: activeModule === 'all' }" @click="emit('filter', 'all')">
           <span>全部网站</span><b>{{ websiteModules(services).length }}</b>
         </button>
@@ -45,44 +50,29 @@ function websiteModules(services: readonly ServiceRuntimeStatus[]) {
           <span>{{ module.name }}</span><b>{{ module.serviceCount }}</b>
         </button>
       </div>
-    </details>
+    </PnwPrimarySection>
 
-    <details class="primary-block" open>
-      <summary class="block-title">
-        <span>Properties</span><i aria-hidden="true">›</i>
-      </summary>
-      <div class="block-body">
+    <PnwPrimarySection title="Properties">
+      <div class="section-body">
         <PdhPropertiesPanel :service="selectedService" :show-title="false" />
       </div>
-    </details>
+    </PnwPrimarySection>
 
-    <details class="primary-block" open>
-      <summary class="block-title">
-        <span>运行摘要</span><i aria-hidden="true">›</i>
-      </summary>
-      <div class="block-body">
+    <PnwPrimarySection title="运行摘要">
+      <div class="section-body">
         <dl>
           <div><dt>Dev Hub 管理</dt><dd>{{ services.filter((item) => item.managed).length }}</dd></div>
           <div><dt>外部监控</dt><dd>{{ services.filter((item) => item.ownership === 'external').length }}</dd></div>
           <div><dt>部分/异常</dt><dd>{{ services.filter((item) => item.health === 'partial' || item.lifecycle === 'conflict').length }}</dd></div>
         </dl>
       </div>
-    </details>
-
-  </aside>
+    </PnwPrimarySection>
+  </PnwPrimaryPanel>
 </template>
 
 <style scoped>
-.primary-panel { height: 100%; padding: 8px 0 12px; box-sizing: border-box; overflow-y: auto; }
-.primary-block { width: 100%; margin-inline: 0; }
-.primary-block + .primary-block { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
-.block-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 12px; border-radius: 0; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); cursor: pointer; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; list-style: none; user-select: none; }
-.block-title::-webkit-details-marker { display: none; }
-.block-title:hover { background: var(--pnw-control-hover-bg, var(--pnw-workbench-default-hover-bg, rgba(59, 130, 246, .07))); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); }
-.block-title:focus-visible { outline: 1px solid var(--pnw-focus-ring, var(--pnw-workbench-default-focus, #2563eb)); outline-offset: 1px; }
-.block-title i { font-size: 17px; font-style: normal; font-weight: 500; line-height: 1; transform: rotate(0deg); transition: transform .14s ease; }
-.primary-block[open] > .block-title i { transform: rotate(90deg); }
-.block-body { padding: 4px 5px 0; }
+.primary-panel { width: 100%; height: 100%; }
+.section-body { padding: 4px 5px; }
 .module-list { max-height: min(28vh, 230px); overflow-y: auto; scrollbar-width: thin; }
 button { width: 100%; display: flex; justify-content: space-between; align-items: center; border: 0; border-radius: 7px; padding: 8px 9px; background: transparent; color: inherit; cursor: pointer; text-align: left; }
 button:hover, button.active { background: var(--pnw-control-active-bg, var(--pnw-workbench-default-active-bg, rgba(37, 99, 235, .1))); color: var(--pnw-control-active-text, var(--pnw-workbench-default-active-text, #1d4ed8)); }

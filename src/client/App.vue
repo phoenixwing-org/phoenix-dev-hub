@@ -98,6 +98,11 @@ const runningCount = computed(() => services.value.filter(
   (service) => ["running", "starting", "stopping", "external", "conflict"].includes(service.lifecycle),
 ).length);
 const adminPluginViewActive = computed(() => activeNodeId.value === "admin-plugin-development");
+const servicePrimaryTitle = computed(() => activeNodeId.value === "services-settings"
+  ? "服务设置"
+  : activeNodeId.value === "hub-settings"
+    ? "Hub 设置"
+    : "服务进程");
 const activeWorkbenchTabId = computed(() => adminPluginViewActive.value ? "admin-plugins" : "services");
 const workbenchTabs = computed(() => [{
   id: "services",
@@ -751,6 +756,7 @@ onBeforeUnmount(() => {
         />
         <PdhPrimaryPanel
           v-else
+          :title="servicePrimaryTitle"
           :services="services"
           :active-module="activeWebsiteModule"
           :selected-service="selectedService"

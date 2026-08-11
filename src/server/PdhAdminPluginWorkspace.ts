@@ -1020,12 +1020,12 @@ export class PdhAdminPluginWorkspace {
     }
     const settingsValue = record(root.settings, "Admin 插件工作区设置");
     const settings: AdminPluginWorkspaceSettings = {
-      adminWebRoot: text(settingsValue.adminWebRoot, "Admin Web 根目录"),
-      adminNodeRoot: text(settingsValue.adminNodeRoot, "Admin Node 根目录"),
+      adminWebRoot: path.resolve(this.#projectRoot, text(settingsValue.adminWebRoot, "Admin Web 根目录")),
+      adminNodeRoot: path.resolve(this.#projectRoot, text(settingsValue.adminNodeRoot, "Admin Node 根目录")),
       adminWebServiceId: text(settingsValue.adminWebServiceId, "Admin Web 服务 ID"),
       adminApiServiceId: text(settingsValue.adminApiServiceId, "Admin API 服务 ID"),
       ...(typeof settingsValue.postgresEnvFile === "string" && settingsValue.postgresEnvFile.trim()
-        ? { postgresEnvFile: settingsValue.postgresEnvFile.trim() }
+        ? { postgresEnvFile: path.resolve(this.#projectRoot, settingsValue.postgresEnvFile.trim()) }
         : {}),
     };
     const plugins = root.plugins.map((item): AdminPluginRegistration => {
@@ -1039,7 +1039,7 @@ export class PdhAdminPluginWorkspace {
       }
       return {
         id,
-        productRoot: text(plugin.productRoot, "Admin 插件 productRoot"),
+        productRoot: path.resolve(this.#projectRoot, text(plugin.productRoot, "Admin 插件 productRoot")),
         manifestPath: safeRelative(text(plugin.manifestPath, "Admin 插件 manifestPath"), "manifestPath"),
         createdAt: text(plugin.createdAt, "Admin 插件 createdAt"),
         ...(typeof plugin.moduleId === "string" && plugin.moduleId.trim()

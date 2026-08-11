@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import PnwPageLayout from "phoenix-wing/layout/PnwPageLayout.vue";
 import type {
   AdminPluginCandidate,
   AdminPluginCatalogResponse,
@@ -140,18 +141,17 @@ async function saveSettings(): Promise<void> {
 </script>
 
 <template>
-  <main class="admin-plugin-view">
-    <header class="view-header">
-      <div>
-        <span class="eyebrow">PHOENIX ADMIN DEVELOPMENT</span>
-        <h1>Admin 插件</h1>
-        <p>组合本机插件源码并挂载到同一套 Admin Host；插件本身不是可启动网站。</p>
-      </div>
+  <PnwPageLayout
+    class="admin-plugin-view"
+    title="Admin 插件"
+    subtitle="组合本机插件源码并挂载到同一套 Admin Host；插件本身不是可启动网站"
+  >
+    <template #actions>
       <div class="header-actions">
         <button type="button" :disabled="!!busy" @click="startHost">启动 Admin Host</button>
         <button type="button" class="primary" :disabled="!!busy" @click="verify">{{ busy === 'verify' ? '核验中…' : '装配核验' }}</button>
       </div>
-    </header>
+    </template>
 
     <section v-if="!selected" class="empty-state">
       <div class="empty-mark">◇</div>
@@ -286,12 +286,13 @@ async function saveSettings(): Promise<void> {
       <div v-if="editingSettings" class="settings-actions"><button type="button" class="primary" :disabled="!!busy" @click="saveSettings">保存本机设置</button></div>
       <p class="recovery">退出 / 恢复：先停止 Admin Host → 对每个插件执行“开发卸载” → 再启动稳定 Host。数据库初始化与迁移由开发者在 Hub 之外处理。</p>
     </section>
-  </main>
+  </PnwPageLayout>
 </template>
 
 <style scoped>
-.admin-plugin-view { height: 100%; box-sizing: border-box; overflow-y: auto; padding: 20px 24px 36px; color: var(--pnw-workbench-text, #e2e8f0); background: var(--pnw-workbench-bg, #0f172a); }
-.view-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-bottom: 16px; }.eyebrow { color: #3b82f6; font-size: 10px; font-weight: 900; letter-spacing: .22em; }.view-header h1 { margin: 4px 0 2px; font-size: 25px; }.view-header p,.section-title p,.plugin-heading p { margin: 0; color: var(--pnw-workbench-muted, #94a3b8); font-size: 11px; }.header-actions,.plugin-actions,.settings-actions { display: flex; gap: 8px; }
+.admin-plugin-view { width: 100%; height: 100%; --pnw-page-main-block-padding: 20px 24px 36px; color: var(--pnw-workbench-text, #e2e8f0); background: var(--pnw-workbench-bg, #0f172a); }
+.section-title p,.plugin-heading p { margin: 0; color: var(--pnw-workbench-muted, #94a3b8); font-size: 11px; }.header-actions,.plugin-actions,.settings-actions { display: flex; gap: 8px; }
+.header-actions button { height: 30px; padding: 0 10px; line-height: 1; }
 .plugin-actions { flex-wrap: wrap; justify-content: flex-end; }
 button { border: 1px solid var(--pnw-workbench-border, #334155); border-radius: 6px; padding: 7px 10px; background: transparent; color: inherit; cursor: pointer; font-size: 11px; }button:hover { background: var(--pnw-control-hover-bg, rgba(59,130,246,.1)); }button:disabled { cursor: not-allowed; opacity: .42; }.primary { border-color: #2563eb; background: #2563eb; color: white; }.danger { color: #ef4444; }
 .panel { margin-bottom: 12px; border: 1px solid var(--pnw-workbench-border, #28384c); border-radius: 9px; background: var(--pnw-workbench-surface, rgba(15,23,42,.56)); }.plugin-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 17px; }.title-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }.title-line h2 { margin: 0; font-size: 18px; }.plugin-heading small { display: block; margin-top: 5px; color: var(--pnw-workbench-muted, #94a3b8); font-size: 9px; }.state,.ddl { padding: 3px 7px; border-radius: 999px; background: rgba(148,163,184,.13); color: #94a3b8; font-size: 9px; font-weight: 800; }.state[data-state="mounted"] { background: rgba(34,197,94,.13); color: #22c55e; }.state[data-state="partial"],.state[data-state="conflict"],.state[data-state="unavailable"],.ddl { background: rgba(245,158,11,.13); color: #f59e0b; }
@@ -303,5 +304,5 @@ label { display: grid; gap: 5px; }label > span { color: var(--pnw-workbench-mute
 .verify-panel article { display: grid; grid-template-columns: minmax(140px,1fr) auto auto auto; gap: 8px; align-items: center; padding: 9px 14px; border-top: 1px solid rgba(148,163,184,.09); font-size: 9px; }.verify-panel article ul { grid-column: 1/-1; padding: 3px 0; }.verify-panel article li { display: flex; justify-content: space-between; color: #f59e0b; }.verify-panel article li.ok { color: #22c55e; }
 .verification-boundary { margin: 12px 14px; padding: 11px; border: 1px solid rgba(245,158,11,.38); border-radius: 7px; background: rgba(245,158,11,.06); font-size: 9px; }.verification-boundary > strong { color: #f59e0b; }.verification-boundary > p { color: var(--pnw-workbench-muted, #94a3b8); }.gate-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }.gate-groups h4 { margin: 0 0 5px; font-size: 10px; }.gate-groups article { display: grid; grid-template-columns: auto minmax(0,1fr); padding: 6px 0; border-top: 1px solid rgba(148,163,184,.09); }.gate-groups article code { overflow: hidden; color: var(--pnw-workbench-muted, #94a3b8); text-overflow: ellipsis; white-space: nowrap; }.gate-groups article small { grid-column: 1/-1; color: #f59e0b; }.verification-boundary > ul { margin: 9px 0 0; padding-left: 18px; color: #f59e0b; }
 .settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px 14px; }.inline { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }.settings-actions { justify-content: flex-end; margin: 0 14px 12px; }.empty-state { display: grid; justify-items: center; align-content: center; min-height: 48vh; color: var(--pnw-workbench-muted, #94a3b8); text-align: center; }.empty-mark { font-size: 40px; color: #3b82f6; }.empty-state h2 { margin: 10px 0 4px; color: var(--pnw-workbench-text, #e2e8f0); font-size: 17px; }.empty-state p { max-width: 560px; font-size: 11px; line-height: 1.6; }
-@media (max-width: 900px) { .view-header,.plugin-heading { align-items: stretch; flex-direction: column; }.mount-grid,.two-column,.settings-grid,.gate-groups { grid-template-columns: 1fr; }.verify-panel > article { grid-template-columns: 1fr auto; }.verify-panel > article span:nth-of-type(2),.verify-panel > article > code { display: none; } }
+@media (max-width: 900px) { .plugin-heading { align-items: stretch; flex-direction: column; }.mount-grid,.two-column,.settings-grid,.gate-groups { grid-template-columns: 1fr; }.verify-panel > article { grid-template-columns: 1fr auto; }.verify-panel > article span:nth-of-type(2),.verify-panel > article > code { display: none; } }
 </style>

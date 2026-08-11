@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import PnwPageHeader from "phoenix-wing/layout/PnwPageHeader.vue";
 import type {
   BuiltinServiceConfigCatalogResponse,
   BuiltinServiceConfigEntry,
@@ -614,9 +615,15 @@ watch(
       :class="['project-dialog', { embedded, subview: embedded && view !== 'list' }]"
       :role="embedded && view === 'list' ? 'region' : 'dialog'"
       :aria-modal="embedded && view === 'list' ? undefined : 'true'"
-      aria-labelledby="project-dialog-title"
+      :aria-label="embedded && view === 'list' ? '服务设置' : undefined"
+      :aria-labelledby="embedded && view === 'list' ? undefined : 'project-dialog-title'"
     >
-      <header>
+      <PnwPageHeader
+        v-if="embedded && view === 'list'"
+        title="服务设置"
+        subtitle="管理产品系列、默认服务与 User 项目"
+      />
+      <header v-else class="dialog-header">
         <div>
           <p>LOCAL SERVICE CONFIG</p>
           <h2 id="project-dialog-title">
@@ -1024,14 +1031,15 @@ watch(
 
 <style scoped>
 .dialog-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(15, 23, 42, .42); backdrop-filter: blur(2px); }
-.settings-view { width: 100%; min-height: 100%; padding: 18px; box-sizing: border-box; background: var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, #f8fafc)); }
+.settings-view { width: 100%; height: 100%; min-height: 0; padding: 0; box-sizing: border-box; overflow: hidden; background: var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, #f8fafc)); }
 .settings-view.has-subview { height: 100%; min-height: 0; display: grid; place-items: center; overflow: hidden; padding: 12px; background: rgba(15, 23, 42, .32); backdrop-filter: blur(2px); }
 .project-dialog { width: min(760px, 100%); max-height: min(820px, calc(100vh - 48px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 14px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); box-shadow: 0 24px 80px rgba(15, 23, 42, .28); }
-.project-dialog.embedded { width: 100%; max-height: none; min-height: calc(100vh - 150px); margin: 0; border-radius: 10px; box-shadow: none; }
-.project-dialog.embedded.subview { width: min(720px, 100%); max-height: 100%; min-height: 0; border-radius: 14px; box-shadow: 0 24px 80px rgba(0, 0, 0, .35); }
-header, footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; }
-header { border-bottom: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
-header p { margin: 0 0 3px; color: #2563eb; font-size: 9px; font-weight: 800; letter-spacing: .15em; }
+.project-dialog.embedded { width: 100%; height: 100%; max-height: none; min-height: 0; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+.project-dialog.embedded.subview { width: min(720px, 100%); max-height: 100%; min-height: 0; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 14px; box-shadow: 0 24px 80px rgba(0, 0, 0, .35); }
+.dialog-header, .project-dialog > footer, .profile-form-list article > header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dialog-header, .project-dialog > footer { padding: 14px 18px; }
+.dialog-header { border-bottom: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
+.dialog-header p { margin: 0 0 3px; color: #2563eb; font-size: 9px; font-weight: 800; letter-spacing: .15em; }
 h2 { margin: 0; font-size: 18px; }
 .dialog-content { min-height: 0; display: grid; gap: 14px; overflow-y: auto; padding: 18px; }
 .project-list-view, .import-view, .service-editor { align-content: start; }

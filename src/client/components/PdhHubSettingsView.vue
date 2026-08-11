@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import PnwPageLayout from "phoenix-wing/layout/PnwPageLayout.vue";
 import type { HubRuntimeInfo } from "@shared/contracts";
 import { devHubApi } from "../api";
 
@@ -41,15 +42,14 @@ onMounted(() => void refresh());
 </script>
 
 <template>
-  <section class="hub-settings">
-    <header>
-      <div>
-        <p>PHOENIX DEV HUB</p>
-        <h1>Hub 设置</h1>
-        <span>管理 Dev Hub 自身；网站与 API 仍在“服务设置”中配置。</span>
-      </div>
-      <button type="button" class="refresh" title="刷新 Hub 信息" @click="refresh">↻</button>
-    </header>
+  <PnwPageLayout
+    class="hub-settings"
+    title="Hub 设置"
+    subtitle="管理 Dev Hub 自身；网站与 API 仍在“服务设置”中配置"
+  >
+    <template #actions>
+      <button type="button" class="refresh" title="刷新 Hub 信息" aria-label="刷新 Hub 信息" @click="refresh">↻</button>
+    </template>
 
     <div class="settings-grid">
       <article>
@@ -101,15 +101,12 @@ onMounted(() => void refresh());
         </footer>
       </section>
     </div>
-  </section>
+  </PnwPageLayout>
 </template>
 
 <style scoped>
-.hub-settings { min-height: 100%; padding: 24px 28px 40px; color: var(--pnw-workbench-fg, #dbeafe); }
-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
-header p { margin: 0 0 5px; color: #3b82f6; font-size: 10px; font-weight: 900; letter-spacing: .18em; }
-h1 { margin: 0 0 5px; font-size: 24px; }
-header span, article p, small { color: var(--pnw-workbench-muted, #94a3b8); font-size: 11px; line-height: 1.65; }
+.hub-settings { width: 100%; height: 100%; --pnw-page-main-block-padding: 24px 28px 40px; color: var(--pnw-workbench-fg, #dbeafe); }
+article p, small { color: var(--pnw-workbench-muted, #94a3b8); font-size: 11px; line-height: 1.65; }
 .refresh { width: 30px; height: 28px; border: 1px solid var(--pnw-workbench-border, #28384c); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
 .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 article { padding: 17px; border: 1px solid var(--pnw-workbench-border, #28384c); border-radius: 9px; background: var(--pnw-workbench-surface, rgba(15,23,42,.56)); }

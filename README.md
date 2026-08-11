@@ -144,6 +144,29 @@ version 2，同时包含 Series/Profile 默认服务、隐藏状态和 User 项�
 可能包含本机绝对路径或环境身份，均受 Git 忽略，不得提交。它们不属于发布包备份范围；
 需要迁移工作台时，由使用者在受控位置自行备份并点检其中的路径。
 
+Admin 插件登记可从公开模板开始：
+
+```bash
+mkdir -p .runtime
+cp config/admin-plugins.sample.json .runtime/admin-plugins.json
+```
+
+模板路径相对 Hub 根目录解析，示例包含 Admin Vue/Node Host 与 Open Issue、Function 两个插件登记。
+复制后应删除本机不存在的条目并核对 `moduleId`。JSON 只负责登记；实际 Vue/Node symlink 与
+`.git/info/exclude` marker 必须在“系统 → Admin 工具 → Admin 插件”中检查后点击“开发挂载”创建。
+`operations` 在 sample 中保留为空对象，用于说明运行时结构；它是 Hub 自动记录的本机操作历史，
+不应预填或伪造成功记录。
+
+sample 中的 Open Issue 是开发挂载示例。也可以由本机自动化在 Hub 启动后调用固定 ID：
+
+```bash
+curl -X POST -H 'Content-Type: application/json' -d '{}' \
+  http://127.0.0.1:42100/api/admin-plugins/phoenix-open-issue-local/mount
+```
+
+后端会重新检查 Manifest、moduleId、源目录、Host 目标、现有链接和 Git marker；存在实体目录或外来
+链接时拒绝覆盖。不要由 AI 直接创建链接或手写成功状态。
+
 Phoenix Admin Development 的 sample 命令保持为纯 `pnpm dev`，数据库初始化、seed、迁移和插件生命周期
 由开发者在 Hub 之外处理。发布验收若需要数据库安全门禁，应使用独立 Profile；真实数据库名、Host commit、
 包 SHA、Registry integrity 与路径只允许进入 `services.user.json` 或 `.runtime` 本机配置，连接串、token、
@@ -213,6 +236,8 @@ API 或 Git 中写出密码。
 
 Phoenix Dev Hub 使用 [Apache License 2.0](LICENSE)。正式仓库为
 [gitee.com/phoenixwing/phoenix-dev-hub](https://gitee.com/phoenixwing/phoenix-dev-hub)，旧地址不再作为发布入口。
+
+Copyright © 2024–2026 凤凰之翼（PhoenixWing）贡献者。
 
 ## 验证
 

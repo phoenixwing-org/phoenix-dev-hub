@@ -1,0 +1,28 @@
+{
+  "sampleNotice": "复制为 .runtime/admin-plugins.json 后使用。相对路径以 phoenix-dev-hub 根目录为基准；删除本机不存在的插件条目。写入登记不等于完成挂载，仍需在 Admin 插件 View 中检查并点击开发挂载。",
+  "version": 1,
+  "settings": {
+    "adminWebRoot": "../phoenix-admin-vue",
+    "adminNodeRoot": "../phoenix-admin-node",
+    "adminWebServiceId": "admin-web",
+    "adminApiServiceId": "admin-api"
+  },
+  "plugins": [
+    {
+      "id": "phoenix-open-issue-local",
+      "productRoot": "../phoenix-open-issue",
+      "manifestPath": "packages/admin-plugin/manifest.json",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "moduleId": "phoenix-open-issue",
+      "name": "Open Issue"
+    },
+    {
+      "id": "phoenix-function-develop-local",
+      "productRoot": "../phoenix-function-develop",
+      "manifestPath": "packages/admin-plugin/manifest.json",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "moduleId": "phoenix-function-develop",
+      "name": "Phoenix Function Develop"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import PnwPageLayout from "phoenix-wing/layout/PnwPageLayout.vue";
 import type {
   ServiceEndpointDefinition,
   ServiceEnvironmentKind,
@@ -376,42 +377,43 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
 </script>
 
 <template>
-  <section class="service-editor" aria-label="开发服务列表">
-    <div class="service-table-wrap">
-      <header class="editor-heading">
-        <div class="heading-copy">
-          <h1>服务进程</h1>
-          <p>启动动作来自受控清单，不接受浏览器传入命令</p>
+  <PnwPageLayout
+    class="service-editor"
+    title="服务进程"
+    subtitle="启动动作来自受控清单，不接受浏览器传入命令"
+    aria-label="开发服务列表"
+  >
+    <template #actions>
+      <div class="heading-actions">
+        <label class="search-control">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="7" cy="7" r="4" />
+            <path d="m10 10 3 3" />
+          </svg>
+          <input v-model="searchQueryModel" type="search" placeholder="搜索服务、端口" aria-label="搜索服务和端口">
+        </label>
+        <select v-model="sortModeModel" class="sort-control" aria-label="服务排序方式" title="服务排序方式">
+          <option value="name">按名称</option>
+          <option value="status">状态优先</option>
+          <option value="port">按端口</option>
+          <option value="configured">配置顺序</option>
+        </select>
+        <div class="tree-actions" aria-label="分组折叠操作">
+          <button type="button" title="全部展开" @click="setAllCollapsed(false)">展开</button>
+          <button type="button" title="全部折叠" @click="setAllCollapsed(true)">折叠</button>
         </div>
-        <div class="heading-actions">
-          <label class="search-control">
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <circle cx="7" cy="7" r="4" />
-              <path d="m10 10 3 3" />
-            </svg>
-            <input v-model="searchQueryModel" type="search" placeholder="搜索服务、端口" aria-label="搜索服务和端口">
-          </label>
-          <select v-model="sortModeModel" class="sort-control" aria-label="服务排序方式" title="服务排序方式">
-            <option value="name">按名称</option>
-            <option value="status">状态优先</option>
-            <option value="port">按端口</option>
-            <option value="configured">配置顺序</option>
-          </select>
-          <div class="tree-actions" aria-label="分组折叠操作">
-            <button type="button" title="全部展开" @click="setAllCollapsed(false)">展开</button>
-            <button type="button" title="全部折叠" @click="setAllCollapsed(true)">折叠</button>
-          </div>
-          <span class="service-count">
-            <template v-if="searchQueryModel.trim()">{{ visibleServices.length }} / {{ services.length }}</template>
-            <template v-else>{{ services.length }}</template>
-            个进程
-          </span>
-          <button type="button" class="add-project" @click="emit('configure')">
-            <span aria-hidden="true">⚙</span>服务配置
-          </button>
-        </div>
-      </header>
+        <span class="service-count">
+          <template v-if="searchQueryModel.trim()">{{ visibleServices.length }} / {{ services.length }}</template>
+          <template v-else>{{ services.length }}</template>
+          个进程
+        </span>
+        <button type="button" class="add-project" @click="emit('configure')">
+          <span aria-hidden="true">⚙</span>服务配置
+        </button>
+      </div>
+    </template>
 
+    <div class="service-table-wrap">
       <div v-if="configurationErrors.length" class="configuration-alert" role="alert">
         <strong>服务配置错误</strong>
         <span v-for="error in configurationErrors" :key="error">{{ error }}</span>
@@ -703,15 +705,11 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
         <template v-else>当前筛选下没有服务。</template>
       </div>
     </div>
-  </section>
+  </PnwPageLayout>
 </template>
 
 <style scoped>
-.service-editor { min-height: 100%; display: flex; padding: 20px; box-sizing: border-box; }
-.editor-heading { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 8px 12px 8px 14px; box-sizing: border-box; border-bottom: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); background: var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, rgba(148, 163, 184, .08))); }
-.heading-copy { min-width: 0; display: flex; align-items: baseline; gap: 11px; }
-.editor-heading h1 { flex: 0 0 auto; margin: 0; font-size: 16px; letter-spacing: -0.01em; }
-.editor-heading p { overflow: hidden; margin: 0; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.service-editor { width: 100%; height: 100%; --pnw-page-main-block-padding: 20px; }
 .heading-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
 .search-control { width: clamp(150px, 16vw, 230px); height: 30px; display: flex; align-items: center; gap: 6px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); border-radius: 6px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); }
 .search-control:focus-within { border-color: var(--pnw-focus-ring, var(--pnw-workbench-default-focus, #2563eb)); box-shadow: 0 0 0 1px var(--pnw-focus-ring, var(--pnw-workbench-default-focus, #2563eb)); }
@@ -726,7 +724,7 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
 .tree-actions button:last-child { border-right: 0; }
 .tree-actions button:hover { background: var(--pnw-control-hover-bg, var(--pnw-workbench-default-hover-bg, rgba(59, 130, 246, .08))); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); }
 .service-count { padding: 6px 10px; border-radius: 999px; background: var(--pnw-control-active-bg, var(--pnw-workbench-default-active-bg, rgba(37, 99, 235, .1))); color: var(--pnw-control-active-text, var(--pnw-workbench-default-active-text, #2563eb)); font-size: 12px; font-weight: 700; }
-.service-table-wrap { flex: 1 1 auto; min-width: 0; overflow-x: auto; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 10px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); box-shadow: 0 12px 34px rgba(15, 23, 42, .055); }
+.service-table-wrap { width: 100%; min-width: 0; min-height: 100%; overflow-x: auto; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 10px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); box-shadow: 0 12px 34px rgba(15, 23, 42, .055); }
 .service-table { width: 100%; min-width: 960px; table-layout: fixed; border-collapse: collapse; color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); }
 .service-column { width: 36%; }
 .status-column { width: 15%; }
@@ -813,7 +811,7 @@ button:hover:not(:disabled) { background: var(--pnw-control-hover-bg, var(--pnw-
 button:disabled { opacity: .42; cursor: not-allowed; }
 button.primary-action { background: #2563eb; border-color: #2563eb; color: #fff; }
 button.danger-action { color: #ef4444; border-color: rgba(239, 68, 68, .48); }
-.add-project { width: auto; display: inline-flex; align-items: center; gap: 4px; border-color: color-mix(in srgb, var(--pnw-control-active-text, #2563eb) 38%, transparent); color: var(--pnw-control-active-text, var(--pnw-workbench-default-active-text, #2563eb)); padding: 6px 9px; white-space: nowrap; }
+.add-project { width: auto; height: 30px; display: inline-flex; align-items: center; gap: 4px; border-color: color-mix(in srgb, var(--pnw-control-active-text, #2563eb) 38%, transparent); color: var(--pnw-control-active-text, var(--pnw-workbench-default-active-text, #2563eb)); padding: 0 9px; line-height: 1; white-space: nowrap; }
 .add-project span { font-size: 15px; line-height: 1; }
 .more-actions { position: relative; }
 .more-actions summary { display: grid; place-items: center; width: 30px; height: 28px; box-sizing: border-box; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); border-radius: 6px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: inherit; cursor: pointer; font-size: 16px; line-height: 1; list-style: none; }
@@ -825,6 +823,6 @@ button.danger-action { color: #ef4444; border-color: rgba(239, 68, 68, .48); }
 .empty-state { min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); }
 .empty-state strong { color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); }
 .empty-state button { margin-top: 4px; color: var(--pnw-control-active-text, var(--pnw-workbench-default-active-text, #2563eb)); }
-@media (max-width: 920px) { .editor-heading p, .service-count { display: none; } .search-control { width: 150px; } }
-@media (max-width: 720px) { .service-editor { padding: 14px; } .sort-control { max-width: 94px; } .search-control { width: 132px; } }
+@media (max-width: 920px) { .service-count { display: none; } .search-control { width: 150px; } }
+@media (max-width: 720px) { .service-editor { --pnw-page-main-block-padding: 14px; } .sort-control { max-width: 94px; } .search-control { width: 132px; } }
 </style>

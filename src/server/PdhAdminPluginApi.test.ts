@@ -57,7 +57,11 @@ async function fixture(): Promise<{ baseUrl: string; product: string; root: stri
   initGit(node);
   const product = createPlugin(root);
   const manager = new PdhServiceManager([]);
-  const workspace = new PdhAdminPluginWorkspace(hub, { adminWebRoot: web, adminNodeRoot: node });
+  const workspace = new PdhAdminPluginWorkspace(
+    hub,
+    { adminWebRoot: web, adminNodeRoot: node },
+    { syncRuntimeEntities: () => ({ count: 0, sha256: "a".repeat(64) }) },
+  );
   const handler = createApiHandler(
     manager,
     new PdhProjectConfigStore(hub),

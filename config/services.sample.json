@@ -184,6 +184,98 @@
       ]
     },
     {
+      "id": "cool-admin-midway4",
+      "name": "Cool Admin Midway 4",
+      "template": {
+        "runtimeSlot": "cool-admin-midway4",
+        "services": {
+          "web": {
+            "name": "Cool Admin 8.x Vue",
+            "description": "纯 Cool Vue 8.x 联调客户端；不包含 Phoenix、Wing、Pah 或业务插件",
+            "command": {
+              "executable": "pnpm",
+              "args": ["dev", "--host", "127.0.0.1", "--strictPort", "--port", "9200"]
+            },
+            "endpoints": [
+              {
+                "id": "web",
+                "label": "Web",
+                "port": 9200,
+                "openUrl": "http://127.0.0.1:9200/",
+                "healthUrl": "http://127.0.0.1:9200/"
+              }
+            ],
+            "externalStop": "confirm-matching-cwd",
+            "startOrder": 20
+          },
+          "api": {
+            "name": "Cool Admin 8.x / Midway 4 API",
+            "description": "纯 Cool Node 8.x 的 Midway 4 候选；只连接精确命名的本机 PostgreSQL 联调库",
+            "command": {
+              "executable": "pnpm",
+              "args": ["dev:midway4"]
+            },
+            "endpoints": [
+              {
+                "id": "api",
+                "label": "API",
+                "port": 8001,
+                "openUrl": "http://127.0.0.1:8001/",
+                "healthUrl": "http://127.0.0.1:8001/index.html"
+              }
+            ],
+            "externalStop": "confirm-matching-cwd",
+            "startOrder": 10
+          }
+        }
+      },
+      "profiles": [
+        {
+          "id": "integration",
+          "name": "8.x / Midway 4 联调",
+          "runtimeSlot": "cool-admin-midway4-integration",
+          "metadata": {
+            "description": "纯 Cool 8.x 前后端闭环，不测试 Phoenix 扩展",
+            "sourceBaseline": "Node e545ef6 → Midway 4；Vue a2d4ee9",
+            "testGuide": "先启动 API 再启动 Web；检查 8001/9200 健康、登录、菜单权限、错误响应、Cookie/CORS、上传与静态资源。该组只证明阶段 A 基础闭环，不代表 Phoenix 或跨平台发布完成。"
+          },
+          "policy": {
+            "environmentKind": "development",
+            "deploymentMode": "source-mounted",
+            "database": {
+              "serviceRole": "api",
+              "envName": "MIDWAY4_DB_DATABASE",
+              "name": "cool_admin_midway4_validation",
+              "forbiddenNames": [
+                "cool",
+                "phoenix_admin_development",
+                "phoenix_admin_release_validation",
+                "phoenix_admin_production"
+              ]
+            }
+          },
+          "services": {
+            "web": {
+              "id": "cool-admin-midway4-web",
+              "cwd": "../.worktrees/phoenix-admin-midway4/vue"
+            },
+            "api": {
+              "id": "cool-admin-midway4-api",
+              "cwd": "../.worktrees/phoenix-admin-midway4/node",
+              "command": {
+                "env": {
+                  "MIDWAY4_DB_HOST": "127.0.0.1",
+                  "MIDWAY4_DB_PORT": "5432",
+                  "MIDWAY4_DB_USERNAME": "replace-me",
+                  "MIDWAY4_DB_DATABASE": "cool_admin_midway4_validation"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "open-issue",
       "name": "Phoenix Open Issue",
       "template": {

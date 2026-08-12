@@ -34,6 +34,7 @@ http://127.0.0.1:42100
 - 工作台首次打开默认暗色，服务列表首次默认按名称排序；显示偏好、服务搜索词和排序方式由 Pinia Store 持有并写入本机存储，用户切换后刷新仍保持选择。
 - 导航只有“网站”和“系统”两个大分组；网站下面一套网站一个模块，同一模块可以包含 Web、API 等多个受控进程。
 - Series 可以包含多个隔离 Profile。示例中的 Phoenix Admin 提供“开发联调”（source-mounted / DEV ONLY，9000/8101）和“发布验收环境（非正式）”（package-assembled / Registry Wing，9100/8201）两套实例，可并行独立启停、重启、打开和查看日志。
+- 示例另提供独立“Cool Admin Midway 4”组：纯 Cool Vue 8.x 使用 9200，纯 Cool Node 8.x / Midway 4 使用 8001 和精确命名的本机 PostgreSQL 联调库。它不装载 Phoenix、Wing、Pah 或业务插件；右侧 Properties 显示源码基线与人工联调帮助。
 - Profile 的 `environmentKind` 支持 `development/release-validation/preproduction/production`。非开发环境必须从不可变 Pah 业务包装配；production 默认只读，Hub 不提供会假装成功的启动、停止、重启、迁移或导入入口。
 - 发布包装配只写 `.runtime/assemblies`，启动前复核包 SHA/integrity、clean Host commit、隔离数据库、离线 frozen lock、Registry 精确依赖与 realpath；拒绝 `file:/link:/workspace:`、override、源码 symlink 和相邻仓回退。Hub 不执行 Pah 安装、DDL、建库、seed 或权限变更。
 - 默认项目使用 Hub 同级目录的相对路径；“系统 → Dev Hub”下的“服务设置”与“服务总览”并列，集中管理配置，不占用总览的运行操作空间。
@@ -43,7 +44,7 @@ http://127.0.0.1:42100
 - Admin 插件的“装配核验”只报告 source commit、manifest、挂载、Host lifecycle 与路由，不冒充完整产品 verify。结果分别列出尚未记录/运行的 Host-owned 与 plugin-owned lint/typecheck/test/build；`.git/info/exclude` 只影响 Git，不是工具扫描边界。
 - Phoenix Admin Development 的 API 条目只在 Admin Node 目录执行 `pnpm dev`。Hub 不为日常开发启动注入数据库、初始化或测试工具 Profile；插件源码由独立的“Admin 插件”View 选择、修改目录和挂载。
 
-示例清单只保留 Phoenix Admin 开发联调、基于独立 Git worktree 的发布验收，以及旧独立 Open Issue 网站。它可以包含公开、可复核的示例 commit 与包 SHA，但不携带任何使用者的绝对路径、真实数据库、凭据或私有运行状态。Function、BOM、DeskTools 等实际项目由使用者写入自己的 `services.user.json` 或通过设置 View 管理。
+示例清单只保留 Phoenix Admin 开发联调、基于独立 Git worktree 的发布验收、纯 Cool 8.x / Midway 4 联调，以及旧独立 Open Issue 网站。它可以包含公开、可复核的示例 commit 与包 SHA，但不携带任何使用者的绝对路径、真实数据库、凭据或私有运行状态。Function、BOM、DeskTools 等实际项目由使用者写入自己的 `services.user.json` 或通过设置 View 管理。
 
 ## 文档索引
 
@@ -104,6 +105,8 @@ cp config/services.sample.json config/services.user.json
 ```
 
 Hub 不会自动执行 sample；复制后必须复核 `.worktrees`、commit、SHA、integrity、数据库与端口。`services.user.json` 不进入 Git，由使用者与 `.runtime` 一起自行备份。为兼容早期安装，未迁移的 `config/services.json` 仍可读取，但也已受 Git 忽略。加载优先级为 `services.user.json`、旧 `services.json`；两者都不存在时启动会明确提示初始化。每个实际清单项必须包含：
+
+Midway 4 sample 中的 `MIDWAY4_DB_USERNAME=replace-me` 必须在用户配置中替换；密码只从 Hub 进程继承的 `MIDWAY4_DB_PASSWORD` 或 `PGPASSWORD` 读取，不写入 sample。该 Profile 仅允许 loopback 和数据库 `cool_admin_midway4_validation`，其中 `synchronize/initDB/initMenu` 只用于纯 Cool 阶段 A 的隔离开发联调，不得指向共享、发布验收或生产数据库。
 
 - 稳定的进程 `id`、显示名称，以及网站 `moduleId` / `moduleName`；
 - 已存在的工作目录；

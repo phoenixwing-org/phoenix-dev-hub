@@ -71,6 +71,8 @@ function endpointProbeLabel(endpoint: ServiceRuntimeStatus["endpoints"][number])
         <div v-if="service.profileEvidence?.database?.missingRelations?.length"><dt>缺少基线</dt><dd>{{ service.profileEvidence.database.missingRelations.join('、') }}</dd></div>
         <div v-if="service.profileEvidence?.database?.requiredRelationsStatus"><dt>关系清单</dt><dd>{{ service.profileEvidence.database.requiredRelationsStatus }}</dd></div>
         <div v-if="service.profileEvidence?.wingVersion"><dt>Wing</dt><dd>{{ service.profileEvidence.wingSource }} {{ service.profileEvidence.wingVersion }}</dd></div>
+        <div v-if="service.definition.profileMetadata?.sourceBaseline" class="wide"><dt>源码基线</dt><dd>{{ service.definition.profileMetadata.sourceBaseline }}</dd></div>
+        <div v-if="service.definition.profileMetadata?.testGuide" class="wide"><dt>联调帮助</dt><dd class="test-guide">{{ service.definition.profileMetadata.testGuide }}</dd></div>
         <div><dt>当前构建</dt><dd>{{ buildLabels[service.build.state] }}</dd></div>
         <div><dt>PID</dt><dd>{{ service.pid ?? (service.externalProcesses.map((item) => item.pid).join(', ') || '—') }}</dd></div>
         <div><dt>PGID</dt><dd>{{ service.processGroupId ?? (service.externalProcesses.map((item) => item.processGroupId).join(', ') || '—') }}</dd></div>
@@ -102,6 +104,7 @@ dl div { min-width: 0; }
 dl div.wide { grid-column: 1 / -1; }
 dt { margin-bottom: 3px; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
 dd { margin: 0; font-size: 11px; font-weight: 650; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+dd.test-guide { font-family: inherit; font-weight: 500; line-height: 1.55; }
 .endpoints-label { margin-top: 20px; }
 ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 li { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; padding: 8px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, transparent)); border-radius: 7px; background: var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, rgba(148, 163, 184, .08))); }

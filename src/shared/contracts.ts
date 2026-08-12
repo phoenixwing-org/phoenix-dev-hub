@@ -183,6 +183,10 @@ export interface ServiceDefinition {
 export interface ServiceProfileMetadata {
   readonly wingVersion?: string;
   readonly description?: string;
+  /** 服务详情面板展示的人工联调步骤；不作为自动健康门禁。 */
+  readonly testGuide?: string;
+  /** 输入源码/版本的简短冻结证据。 */
+  readonly sourceBaseline?: string;
   readonly [key: string]: string | undefined;
 }
 

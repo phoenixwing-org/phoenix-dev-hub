@@ -100,6 +100,8 @@ describe("services.json", () => {
       "admin-api",
       "admin-release-web",
       "admin-release-api",
+      "cool-admin-midway4-web",
+      "cool-admin-midway4-api",
       "open-issue",
     ]);
     expect(services.every((service) => path.isAbsolute(service.cwd))).toBe(true);
@@ -178,7 +180,40 @@ describe("services.json", () => {
       } },
       endpoints: [{ port: 8201 }],
     });
-    expect(new Set(services.map((service) => service.moduleId)).size).toBe(2);
+    expect(services.find((service) => service.id === "cool-admin-midway4-web")).toMatchObject({
+      profileId: "integration",
+      runtimeSlot: "cool-admin-midway4-integration",
+      command: {
+        args: ["dev", "--host", "127.0.0.1", "--strictPort", "--port", "9200"],
+      },
+      endpoints: [{ port: 9200 }],
+      profileMetadata: {
+        sourceBaseline: "Node e545ef6 → Midway 4；Vue a2d4ee9",
+        testGuide: expect.stringContaining("登录"),
+      },
+    });
+    expect(services.find((service) => service.id === "cool-admin-midway4-api")).toMatchObject({
+      command: {
+        args: ["dev:midway4"],
+        env: {
+          MIDWAY4_DB_HOST: "127.0.0.1",
+          MIDWAY4_DB_PORT: "5432",
+          MIDWAY4_DB_USERNAME: "postgres",
+          MIDWAY4_DB_DATABASE: "cool_admin_midway4_validation",
+        },
+      },
+      endpoints: [{ port: 8001 }],
+      profilePolicy: {
+        environmentKind: "development",
+        deploymentMode: "source-mounted",
+        database: {
+          serviceRole: "api",
+          envName: "MIDWAY4_DB_DATABASE",
+          name: "cool_admin_midway4_validation",
+        },
+      },
+    });
+    expect(new Set(services.map((service) => service.moduleId)).size).toBe(3);
     expect(services.flatMap((service) => service.endpoints).every(
       (endpoint) => endpoint.port > 0 && endpoint.port <= 65_535,
     )).toBe(true);

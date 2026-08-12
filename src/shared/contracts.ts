@@ -10,7 +10,7 @@ export type ServiceHealthState = "ready" | "reachable" | "partial" | "unhealthy"
 export type EndpointProbeState = "healthy" | "unhealthy" | "reachable-unverified" | "unreachable";
 export type ServiceBuildState = "unknown" | "building" | "ready" | "failed";
 export type ServiceOwnership = "hub" | "external" | "none" | "conflict";
-export type ServiceLogSource = "captured" | "monitoring-only";
+export type ServiceLogSource = "captured" | "recovered-ownership" | "monitoring-only";
 export type ServiceEnvironmentKind =
   | "development"
   | "release-validation"

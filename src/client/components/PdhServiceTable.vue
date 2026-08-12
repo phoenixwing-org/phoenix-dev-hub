@@ -7,6 +7,10 @@ import type {
   ServiceRuntimeStatus,
   SystemTerminalCapability,
 } from "@shared/contracts";
+import {
+  pdhPresentedEndpoint,
+  pdhPresentedHealth,
+} from "../PdhServiceHealthPresentation";
 import type { PdhServiceSortMode } from "../stores/PdhWorkbenchPreferencesStore";
 
 defineOptions({ name: "PdhServiceTable" });
@@ -50,13 +54,6 @@ const lifecycleLabels: Readonly<Record<ServiceRuntimeStatus["lifecycle"], string
   stopping: "停止中",
   external: "外部监控",
   conflict: "端口冲突",
-};
-const healthLabels: Readonly<Record<ServiceRuntimeStatus["health"], string>> = {
-  ready: "健康就绪",
-  reachable: "仅端口可达",
-  partial: "部分端点未就绪",
-  unhealthy: "健康检查失败",
-  unknown: "尚未探测",
 };
 const ownershipLabels: Readonly<Record<ServiceRuntimeStatus["ownership"], string>> = {
   hub: "Hub 管理",
@@ -129,7 +126,7 @@ function serviceMatchesQuery(service: ServiceRuntimeStatus, query: string): bool
     service.profileEvidence?.database?.message,
     ...(service.definition.configurationErrors ?? []),
     lifecycleLabels[service.lifecycle],
-    healthLabels[service.health],
+    pdhPresentedHealth(service).label,
     ownershipLabels[service.ownership],
     ...service.endpoints.flatMap((endpoint) => [endpoint.id, endpoint.label, String(endpoint.port)]),
   ];
@@ -561,7 +558,7 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
               <span class="ownership" :data-ownership="row.service.ownership">
                 {{ ownershipLabels[row.service.ownership] }}
               </span>
-              <span class="health" :data-health="row.service.health">{{ healthLabels[row.service.health] }}</span>
+              <span class="health" :data-health="pdhPresentedHealth(row.service).state">{{ pdhPresentedHealth(row.service).label }}</span>
               <small v-if="row.service.message">{{ row.service.message }}</small>
             </td>
             <td>
@@ -576,9 +573,10 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
                     v-for="endpoint in positionedEndpoints(row.service, position)"
                     :key="endpoint.id"
                     :class="{
-                      healthy: endpoint.probeState === 'healthy',
-                      unverified: endpoint.probeState === 'reachable-unverified',
-                      unhealthy: endpoint.probeState === 'unhealthy',
+                      healthy: pdhPresentedEndpoint(row.service, endpoint).state === 'healthy',
+                      unverified: pdhPresentedEndpoint(row.service, endpoint).state === 'reachable-unverified',
+                      unhealthy: pdhPresentedEndpoint(row.service, endpoint).state === 'unhealthy',
+                      checking: pdhPresentedEndpoint(row.service, endpoint).state === 'checking',
                     }"
                     :title="`${endpoint.probeMessage}${endpoint.healthUrl ? ` · ${endpoint.healthUrl}` : ''}`"
                   >
@@ -788,6 +786,7 @@ td > span { color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted,
 .health { display: inline-block; margin-top: 4px; padding: 1px 5px; border-radius: 999px; background: rgba(148, 163, 184, .12); color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 9px; white-space: nowrap; }
 .health[data-health="ready"] { background: rgba(22, 163, 74, .1); color: #15803d; }
 .health[data-health="reachable"] { background: rgba(37, 99, 235, .1); color: #2563eb; }
+.health[data-health="checking"] { background: rgba(37, 99, 235, .1); color: #2563eb; }
 .health[data-health="partial"] { background: rgba(245, 158, 11, .12); color: #b45309; }
 .health[data-health="unhealthy"] { background: rgba(239, 68, 68, .1); color: #dc2626; }
 td small { display: block; max-width: 220px; margin-top: 5px; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); }
@@ -799,6 +798,7 @@ td small { display: block; max-width: 220px; margin-top: 5px; color: var(--pnw-w
 .endpoints span { padding: 3px 6px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, transparent)); border-radius: 5px; background: var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, rgba(148, 163, 184, .12))); color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); white-space: nowrap; }
 .endpoints span.healthy { background: rgba(22, 163, 74, .1); color: #15803d; }
 .endpoints span.unverified { background: rgba(37, 99, 235, .1); color: #2563eb; }
+.endpoints span.checking { background: rgba(37, 99, 235, .1); color: #2563eb; }
 .endpoints span.unhealthy { background: rgba(245, 158, 11, .12); color: #b45309; }
 .pid-cell { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); }
 .actions-heading { text-align: right; }

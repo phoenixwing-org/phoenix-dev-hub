@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { ServiceRuntimeStatus } from "@shared/contracts";
+import {
+  pdhPresentedEndpoint,
+  pdhPresentedHealth,
+} from "../PdhServiceHealthPresentation";
 
 defineOptions({ name: "PdhPropertiesPanel" });
 withDefaults(defineProps<{
@@ -23,13 +27,6 @@ const lifecycleLabels: Readonly<Record<ServiceRuntimeStatus["lifecycle"], string
   external: "外部监控",
   conflict: "端口冲突",
 };
-const healthLabels: Readonly<Record<ServiceRuntimeStatus["health"], string>> = {
-  ready: "健康就绪",
-  reachable: "端口可达（未验证业务健康）",
-  partial: "部分就绪",
-  unhealthy: "不健康",
-  unknown: "未探测",
-};
 const buildLabels: Readonly<Record<ServiceRuntimeStatus["build"]["state"], string>> = {
   unknown: "未报告",
   building: "构建中",
@@ -43,14 +40,6 @@ const environmentLabels = {
   production: "生产（只读）",
 } as const;
 
-function endpointProbeLabel(endpoint: ServiceRuntimeStatus["endpoints"][number]): string {
-  return ({
-    healthy: "HEALTHY",
-    unhealthy: "HEALTH FAIL",
-    "reachable-unverified": "LISTEN ONLY",
-    unreachable: "OFF",
-  })[endpoint.probeState];
-}
 </script>
 
 <template>
@@ -64,7 +53,7 @@ function endpointProbeLabel(endpoint: ServiceRuntimeStatus["endpoints"][number])
         <div><dt>网站模块</dt><dd>{{ service.definition.moduleName }}</dd></div>
         <div><dt>来源</dt><dd>{{ ownershipLabels[service.ownership] }}</dd></div>
         <div><dt>生命周期</dt><dd>{{ lifecycleLabels[service.lifecycle] }}</dd></div>
-        <div><dt>健康度</dt><dd>{{ healthLabels[service.health] }}</dd></div>
+        <div><dt>健康度</dt><dd>{{ pdhPresentedHealth(service).label }}</dd></div>
         <div v-if="service.definition.profilePolicy"><dt>环境</dt><dd>{{ environmentLabels[service.definition.profilePolicy.environmentKind] }}</dd></div>
         <div v-if="service.profileEvidence"><dt>装配</dt><dd>{{ service.profileEvidence.deploymentMode }} / {{ service.profileEvidence.state }}</dd></div>
         <div v-if="service.profileEvidence"><dt>数据库</dt><dd>{{ service.profileEvidence.databaseName }}<template v-if="service.profileEvidence.database"> · {{ service.profileEvidence.database.state }}</template></dd></div>
@@ -76,7 +65,7 @@ function endpointProbeLabel(endpoint: ServiceRuntimeStatus["endpoints"][number])
         <div><dt>当前构建</dt><dd>{{ buildLabels[service.build.state] }}</dd></div>
         <div><dt>PID</dt><dd>{{ service.pid ?? (service.externalProcesses.map((item) => item.pid).join(', ') || '—') }}</dd></div>
         <div><dt>PGID</dt><dd>{{ service.processGroupId ?? (service.externalProcesses.map((item) => item.processGroupId).join(', ') || '—') }}</dd></div>
-        <div><dt>日志</dt><dd>{{ service.logSource === 'captured' ? 'Hub 捕获' : '仅健康监控' }}</dd></div>
+        <div><dt>日志</dt><dd>{{ service.logSource === 'captured' ? 'Hub 捕获' : service.logSource === 'recovered-ownership' ? '恢复归属；日志不可用' : '仅健康监控' }}</dd></div>
         <div class="wide"><dt>工作目录</dt><dd>{{ service.definition.cwd }}</dd></div>
         <div class="wide"><dt>受控命令</dt><dd>{{ service.definition.command.executable }} {{ service.definition.command.args.join(' ') }}</dd></div>
       </dl>
@@ -85,7 +74,7 @@ function endpointProbeLabel(endpoint: ServiceRuntimeStatus["endpoints"][number])
         <li v-for="endpoint in service.endpoints" :key="endpoint.id">
           <span>{{ endpoint.label }}</span>
           <code>127.0.0.1:{{ endpoint.port }}</code>
-          <b :class="{ ok: endpoint.probeState === 'healthy', listen: endpoint.probeState === 'reachable-unverified', bad: endpoint.probeState === 'unhealthy' }">{{ endpointProbeLabel(endpoint) }}</b>
+          <b :class="{ ok: pdhPresentedEndpoint(service, endpoint).state === 'healthy', listen: ['reachable-unverified', 'checking'].includes(pdhPresentedEndpoint(service, endpoint).state), bad: pdhPresentedEndpoint(service, endpoint).state === 'unhealthy' }">{{ pdhPresentedEndpoint(service, endpoint).label }}</b>
           <small>{{ endpoint.probeMessage }}</small>
         </li>
       </ul>

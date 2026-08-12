@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { storeToRefs } from "pinia";
 import {
   PnwWorkbenchShell,
@@ -21,6 +21,7 @@ import PdhAdminPluginPrimaryPanel from "./components/PdhAdminPluginPrimaryPanel.
 import PdhAdminPluginView from "./components/PdhAdminPluginView.vue";
 import PdhHubSettingsView from "./components/PdhHubSettingsView.vue";
 import PdhPrimaryPanel from "./components/PdhPrimaryPanel.vue";
+import PdhProcessStopConfirmation from "./components/PdhProcessStopConfirmation.vue";
 import PdhServiceConfigView from "./components/PdhServiceConfigView.vue";
 import PdhServiceTable from "./components/PdhServiceTable.vue";
 import { usePdhWorkbenchPreferencesStore } from "./stores/PdhWorkbenchPreferencesStore";
@@ -71,6 +72,11 @@ const systemTerminal = ref<SystemTerminalCapability>({
 const settingsInitialProjectId = ref("");
 const settingsInitialServiceId = ref("");
 const lastRefreshAt = ref<Date>();
+const pendingStopConfirmation = shallowRef<{
+  readonly details: StopTargetDetails;
+  readonly force: boolean;
+  readonly resolve: (confirmed: boolean) => void;
+}>();
 let refreshPending = false;
 let restoredManagedLogTabs = false;
 const logRefreshPending = new Set<string>();
@@ -461,19 +467,17 @@ function stopDetails(value: unknown): StopTargetDetails | undefined {
     : undefined;
 }
 
-function stopConfirmationText(details: StopTargetDetails, force: boolean): string {
-  const processes = details.processes.map((item) => {
-    return `PID ${item.pid} / PGID ${item.processGroupId} / ${item.command ?? "命令未知"}`;
-  }).join("\n");
-  return [
-    force ? "优雅停止已超时。是否强制终止（SIGKILL）？" : "该服务并非由 Hub 启动，是否仍要关闭？",
-    `端口：${details.ports.join(", ") || "未配置"}`,
-    `工作目录：${details.cwd}`,
-    `受控命令：${details.command}`,
-    processes,
-    details.impact,
-    force ? "强制终止可能丢失未保存数据。" : "确认后仍会再次核验 PID、PGID、启动时间、cwd 与端口所有者。",
-  ].filter(Boolean).join("\n\n");
+function requestStopConfirmation(details: StopTargetDetails, force: boolean): Promise<boolean> {
+  pendingStopConfirmation.value?.resolve(false);
+  return new Promise((resolve) => {
+    pendingStopConfirmation.value = { details, force, resolve };
+  });
+}
+
+function resolveStopConfirmation(confirmed: boolean): void {
+  const pending = pendingStopConfirmation.value;
+  pendingStopConfirmation.value = undefined;
+  pending?.resolve(confirmed);
 }
 
 async function stopWithConfirmation(
@@ -486,11 +490,11 @@ async function stopWithConfirmation(
     if (!(error instanceof ApiError)) throw error;
     const details = stopDetails(error.details);
     if (error.code === "EXTERNAL_CONFIRMATION_REQUIRED" && details) {
-      if (!window.confirm(stopConfirmationText(details, false))) return undefined;
+      if (!await requestStopConfirmation(details, false)) return undefined;
       return stopWithConfirmation(serviceId, { mode: "confirm-external", token: details.token });
     }
     if (error.code === "FORCE_STOP_REQUIRED" && details) {
-      if (!window.confirm(stopConfirmationText(details, true))) return undefined;
+      if (!await requestStopConfirmation(details, true)) return undefined;
       return devHubApi.stopService(serviceId, { mode: "force", token: details.token });
     }
     throw error;
@@ -649,6 +653,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  resolveStopConfirmation(false);
   if (serviceTimer) window.clearInterval(serviceTimer);
   if (logTimer) window.clearInterval(logTimer);
 });
@@ -783,6 +788,13 @@ onBeforeUnmount(() => {
         <span v-if="lastRefreshAt">最近刷新 {{ lastRefreshAt.toLocaleTimeString('zh-CN', { hour12: false }) }}</span>
       </template>
     </PnwWorkbenchShell>
+    <PdhProcessStopConfirmation
+      v-if="pendingStopConfirmation"
+      :details="pendingStopConfirmation.details"
+      :force="pendingStopConfirmation.force"
+      @cancel="resolveStopConfirmation(false)"
+      @confirm="resolveStopConfirmation(true)"
+    />
   </div>
 </template>
 

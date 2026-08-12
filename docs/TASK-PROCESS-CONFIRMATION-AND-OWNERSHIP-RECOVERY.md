@@ -1,0 +1,28 @@
+# 进程确认与 ownership 恢复点检
+
+状态：已完成（2026-08-12 用户点检通过）
+
+范围：仅 Phoenix Dev Hub；不启动、停止或刷新当前 `9000/8101` 服务。
+
+## 应用内危险确认
+
+- [x] 外部进程停止与强制终止不再使用浏览器原生 dialog。
+- [x] 对话框默认不确认，保留明确的“取消”和危险确认动作。
+- [x] PID、PPID、PGID、cwd、command 与端口影响范围结构化分行展示。
+- [x] 长文本可选择、内容区可滚动，窄屏不横向溢出。
+- [x] “复制全部详情”只复制当前确认快照，并反馈复制成功或失败。
+- [x] 身份变化、确认过期和强制终止第二次确认仍由后端复核并 fail-closed。
+
+## ownership 持久化与恢复
+
+- [x] Hub 启动服务后原子写入 Git 忽略的 `.runtime/ownership.json`，保存 serviceId、ownershipId、根进程身份、端口和受控定义身份。
+- [x] 新 Hub 只在 PID、PGID、startedAt、cwd、command、端口所有者和服务定义全部一致时恢复 Hub ownership。
+- [x] stale PID、PID reuse、cwd/command/端口换主或定义变化时撤销记录并按 external/conflict 重新检测。
+- [x] 恢复 ownership 不伪造 stdout/stderr 管道和构建状态；明确显示恢复后的进程日志不可用。
+- [x] stop/exit/unregister 后移除对应 ownership；重复停止保持幂等。
+
+## 门禁与用户点检
+
+- [x] focused 测试覆盖确认复制/默认取消，以及 ownership 恢复、stale、PID reuse、端口换主和不得误杀。
+- [x] `pnpm test`、`pnpm typecheck`、`pnpm build` 通过。
+- [x] 用户点检暗色、长内容滚动、文本选择、复制反馈和取消/确认布局，确认通过。

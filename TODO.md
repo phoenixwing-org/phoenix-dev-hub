@@ -24,6 +24,14 @@
 - [x] 本机自定义项目支持编辑、移除、单项/整套 JSON 导入导出；默认服务支持本机覆盖、显示/隐藏、单条恢复和重置用户配置基线。
 - [ ] 为 User 项目补充可选固定端口与健康检查配置。
 
+### 进程确认与 ownership 恢复
+
+实施与点检清单见 [`docs/TASK-PROCESS-CONFIRMATION-AND-OWNERSHIP-RECOVERY.md`](docs/TASK-PROCESS-CONFIRMATION-AND-OWNERSHIP-RECOVERY.md)。
+
+- [x] 用可滚动、可选择和可复制详情的应用内对话框替代外部停止/强制终止原生确认。
+- [x] 安全持久化 Hub-owned 根进程身份，并在 Hub 重启后经完整复核恢复 ownership。
+- [x] 恢复 ownership 不伪造日志管道或构建结果，陈旧记录必须 fail-closed。
+
 ## Phoenix Admin 插件开发工作区
 
 设计、边界与点检清单见 [`docs/ADMIN-PLUGIN-DEVELOPMENT.md`](docs/ADMIN-PLUGIN-DEVELOPMENT.md)。

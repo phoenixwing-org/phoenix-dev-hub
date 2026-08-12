@@ -8,6 +8,7 @@ import { PdhAdminPluginWorkspace } from "./PdhAdminPluginWorkspace.js";
 import { PdhBuiltinServiceConfigStore } from "./PdhBuiltinServiceConfig.js";
 import { PdhProjectConfigStore } from "./PdhProjectConfig.js";
 import { PdhServiceManager } from "./PdhServiceManager.js";
+import { PdhServiceOwnershipStore } from "./PdhServiceOwnershipStore.js";
 import { PdhSystemTerminal } from "./PdhSystemTerminal.js";
 import { serveStatic } from "./staticFiles.js";
 
@@ -69,7 +70,7 @@ const adminPluginWorkspace = new PdhAdminPluginWorkspace(projectRoot, {
 const manager = new PdhServiceManager([
   ...initialBuiltinDefinitions,
   ...projectConfig.serviceDefinitions(),
-], new PdhSystemTerminal());
+], new PdhSystemTerminal(), undefined, undefined, undefined, new PdhServiceOwnershipStore(projectRoot));
 manager.setConfigurationErrors(loadedServiceConfiguration.configurationErrors ?? []);
 const handleApi = createApiHandler(
   manager,

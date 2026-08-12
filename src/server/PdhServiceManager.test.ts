@@ -21,6 +21,12 @@ import {
   PdhServiceManager,
   pdhServiceSpawnEnvironment,
 } from "./PdhServiceManager.js";
+import {
+  PdhMemoryServiceOwnershipStore,
+  PdhServiceOwnershipStore,
+  pdhServiceDefinitionIdentity,
+} from "./PdhServiceOwnershipStore.js";
+import { describeProcess } from "./processDiscovery.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const fixturePath = path.join(projectRoot, "test/fixtures/http-service.mjs");
@@ -105,6 +111,18 @@ async function spawnExternal(
   return child;
 }
 
+async function waitForProcess(child: ChildProcess): Promise<NonNullable<Awaited<ReturnType<typeof describeProcess>>>> {
+  if (!child.pid) throw new Error("测试进程没有 PID");
+  const deadline = Date.now() + 3_000;
+  let process = await describeProcess(child.pid);
+  while (!process?.startedAt && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    process = await describeProcess(child.pid);
+  }
+  if (!process?.startedAt) throw new Error(`无法取得测试进程 ${child.pid} 的身份`);
+  return process;
+}
+
 async function exactFixtureCleanup(child: ChildProcess): Promise<void> {
   if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
   try {
@@ -137,6 +155,108 @@ afterEach(async () => {
 });
 
 describe("PdhServiceManager", () => {
+  it("Hub 重启后精确复核并恢复原 ownership，不把同一 PGID 误报为 external", async () => {
+    const port = await freePort();
+    const service = definition("recover-owned", port);
+    const runtimeRoot = mkdtempSync(path.join(tmpdir(), "pdh-ownership-recovery-"));
+    temporaryRoots.push(runtimeRoot);
+    const firstManager = new PdhServiceManager(
+      [service],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new PdhServiceOwnershipStore(runtimeRoot),
+    );
+    managers.push(firstManager);
+
+    const started = await firstManager.start(service.id);
+    const ready = await waitForState(firstManager, service.id, (status) => status.health === "ready");
+    expect(started.ownershipId).toBeTruthy();
+
+    const reloadedManager = new PdhServiceManager(
+      [service],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new PdhServiceOwnershipStore(runtimeRoot),
+    );
+    managers.push(reloadedManager);
+    const recovered = await waitForState(reloadedManager, service.id, (status) => status.health === "ready");
+
+    expect(recovered).toMatchObject({
+      lifecycle: "running",
+      ownership: "hub",
+      managed: true,
+      pid: ready.pid,
+      processGroupId: ready.processGroupId,
+      ownershipId: ready.ownershipId,
+      logSource: "recovered-ownership",
+      build: { state: "unknown" },
+    });
+    await expect(reloadedManager.logs(service.id)).resolves.toMatchObject({
+      available: false,
+      source: "recovered-ownership",
+      message: expect.stringContaining("无法重新接入"),
+    });
+
+    await reloadedManager.stop(service.id);
+    expect(await waitForState(reloadedManager, service.id, (status) => status.lifecycle === "stopped"))
+      .toMatchObject({ ownership: "none", managed: false });
+    expect(new PdhServiceOwnershipStore(runtimeRoot).entries()).toHaveLength(0);
+  }, 20_000);
+
+  it("持久记录 PID 身份过期时撤销恢复并按外部进程重新检测", async () => {
+    const port = await freePort();
+    const service = definition("stale-owned", port);
+    const child = await spawnExternal(fixturePath, port);
+    const root = await waitForProcess(child);
+    const store = new PdhMemoryServiceOwnershipStore([{
+      serviceId: service.id,
+      ownershipId: "stale-ownership",
+      root: { ...root, startedAt: `${root.startedAt}-reused` },
+      startedAt: new Date().toISOString(),
+      ports: [port],
+      definitionIdentity: pdhServiceDefinitionIdentity(service),
+    }]);
+    const manager = new PdhServiceManager(
+      [service], undefined, undefined, undefined, undefined, store,
+    );
+    managers.push(manager);
+
+    expect(await waitForState(manager, service.id, (status) => status.lifecycle === "external"))
+      .toMatchObject({ ownership: "external", managed: false, logSource: "monitoring-only" });
+    expect(store.entries()).toHaveLength(0);
+  }, 15_000);
+
+  it("恢复时端口已换主则拒绝 Hub ownership，且不得误杀任一外部进程", async () => {
+    const targetPort = await freePort();
+    const otherPort = await freePort();
+    const service = definition("changed-port-owner", targetPort);
+    const target = await spawnExternal(fixturePath, targetPort);
+    const recordedRootChild = await spawnExternal(fixturePath, otherPort);
+    const recordedRoot = await waitForProcess(recordedRootChild);
+    const store = new PdhMemoryServiceOwnershipStore([{
+      serviceId: service.id,
+      ownershipId: "old-ownership",
+      root: recordedRoot,
+      startedAt: new Date().toISOString(),
+      ports: [targetPort],
+      definitionIdentity: pdhServiceDefinitionIdentity(service),
+    }]);
+    const manager = new PdhServiceManager(
+      [service], undefined, undefined, undefined, undefined, store,
+    );
+    managers.push(manager);
+
+    expect(await waitForState(manager, service.id, (status) => status.lifecycle === "external"))
+      .toMatchObject({ ownership: "external", managed: false });
+    expect(store.entries()).toHaveLength(0);
+    expect(await describeProcess(target.pid!)).toBeTruthy();
+    expect(await describeProcess(recordedRootChild.pid!)).toBeTruthy();
+  }, 15_000);
+
   it("配置路径失效时显示不健康并在 spawn 前拒绝启动", async () => {
     const port = await freePort();
     const runtimeEnvProvider = vi.fn(() => ({}));

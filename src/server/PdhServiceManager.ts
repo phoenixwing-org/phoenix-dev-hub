@@ -30,6 +30,11 @@ import {
 } from "./PdhControlledToolProfileResolver.js";
 import { PdhSystemTerminal } from "./PdhSystemTerminal.js";
 import {
+  PdhMemoryServiceOwnershipStore,
+  pdhServiceDefinitionIdentity,
+  type PdhServiceOwnershipPersistence,
+} from "./PdhServiceOwnershipStore.js";
+import {
   describeProcess,
   isPathInside,
   listenerPids,
@@ -38,11 +43,13 @@ import {
 } from "./processDiscovery.js";
 
 interface ManagedProcess {
-  readonly child: ChildProcess;
+  readonly child?: ChildProcess;
   readonly root: ProcessSummary;
   readonly ownershipId: string;
   readonly startedAt: string;
   readonly build: PdhBuildOutputTracker;
+  readonly recovered: boolean;
+  recoveryAnnounced: boolean;
   stopping: boolean;
 }
 
@@ -163,6 +170,7 @@ export class PdhServiceManager {
   readonly #runtimeEnvProvider: PdhRuntimeEnvProvider;
   readonly #profileAssembly: PdhProfileAssembly;
   readonly #profileDatabasePreflight: PdhProfileDatabasePreflight;
+  readonly #ownershipPersistence: PdhServiceOwnershipPersistence;
   #configurationErrors: readonly string[] = [];
 
   constructor(
@@ -171,12 +179,40 @@ export class PdhServiceManager {
     runtimeEnvProvider: PdhRuntimeEnvProvider = () => ({}),
     profileAssembly = new PdhProfileAssembly(),
     profileDatabasePreflight: PdhProfileDatabasePreflight = new PdhPostgresPreflight(),
+    ownershipPersistence: PdhServiceOwnershipPersistence = new PdhMemoryServiceOwnershipStore(),
   ) {
     this.#systemTerminal = systemTerminal;
     this.#runtimeEnvProvider = runtimeEnvProvider;
     this.#profileAssembly = profileAssembly;
     this.#profileDatabasePreflight = profileDatabasePreflight;
+    this.#ownershipPersistence = ownershipPersistence;
     for (const definition of definitions) this.register(definition);
+    for (const record of ownershipPersistence.entries()) {
+      const definition = this.#definitions.get(record.serviceId);
+      const expectedPorts = definition?.endpoints.map((endpoint) => endpoint.port).sort((left, right) => left - right);
+      if (
+        !definition
+        || record.definitionIdentity !== pdhServiceDefinitionIdentity(definition)
+        || !expectedPorts
+        || !sameNumberSet(record.ports, expectedPorts)
+      ) {
+        ownershipPersistence.delete(record.serviceId, record.ownershipId);
+        continue;
+      }
+      this.#managed.set(record.serviceId, {
+        root: record.root,
+        ownershipId: record.ownershipId,
+        startedAt: record.startedAt,
+        build: new PdhBuildOutputTracker(),
+        recovered: true,
+        recoveryAnnounced: false,
+        stopping: false,
+      });
+      this.#logs.get(record.serviceId)?.append(
+        "system",
+        `发现待复核 ownership=${record.ownershipId} rootPid=${record.root.pid} pgid=${record.root.processGroupId}`,
+      );
+    }
   }
 
   serviceIds(): ReadonlySet<string> {
@@ -260,6 +296,7 @@ export class PdhServiceManager {
 
   unregister(serviceId: string): void {
     this.assertDefinitionMutable(serviceId);
+    this.#ownershipPersistence.delete(serviceId);
     this.#definitions.delete(serviceId);
     this.#lastExit.delete(serviceId);
     this.#logs.delete(serviceId);
@@ -339,11 +376,43 @@ export class PdhServiceManager {
           `已撤销过期 ownership：PID ${managed.root.pid} 的身份发生变化或已退出`,
         );
         this.#managed.delete(serviceId);
+        this.#ownershipPersistence.delete(serviceId, managed.ownershipId);
         managed = undefined;
       }
     }
 
     if (managed) {
+      const ownedMembers = await processGroupMembers(managed.root.processGroupId);
+      const ownedMemberIds = new Set(ownedMembers.map((item) => item.pid));
+      const managedRootPid = managed.root.pid;
+      const recoveredRoot = ownedMembers.find((item) => item.pid === managedRootPid);
+      const foreignListeners = listeners.filter((item) => !ownedMemberIds.has(item.pid));
+      if (
+        managed.recovered
+        && (
+          !sameProcessIdentity(managed.root, recoveredRoot)
+          || foreignListeners.length > 0
+          || [process.pid, process.ppid].includes(managed.root.processGroupId)
+        )
+      ) {
+        this.#logs.get(serviceId)?.append(
+          "system",
+          `已拒绝恢复 ownership=${managed.ownershipId}：进程组或端口所有者与持久记录不一致`,
+        );
+        this.#managed.delete(serviceId);
+        this.#ownershipPersistence.delete(serviceId, managed.ownershipId);
+        managed = undefined;
+      }
+    }
+
+    if (managed) {
+      if (managed.recovered && !managed.recoveryAnnounced) {
+        managed.recoveryAnnounced = true;
+        this.#logs.get(serviceId)?.append(
+          "system",
+          `已复核并恢复 Hub ownership=${managed.ownershipId}；当前 Hub 无法重新接入原 stdout/stderr 管道`,
+        );
+      }
       const ownedMemberIds = new Set(
         (await processGroupMembers(managed.root.processGroupId)).map((item) => item.pid),
       );
@@ -382,9 +451,13 @@ export class PdhServiceManager {
         externalProcesses: foreignListeners,
         identityMatched: identityProbe.matched ?? true,
         identityMessage: identityProbe.message,
-        logSource: "captured",
+        logSource: managed.recovered ? "recovered-ownership" : "captured",
         message: foreignListeners.length > 0
           ? "检测到不属于 Hub ownership 的端口所有者；仍可停止 Hub 自己的进程组"
+          : managed.recovered
+            ? health === "ready" || health === "reachable"
+              ? "Hub ownership 已从持久记录恢复；当前 Hub 无法重新接入原 stdout/stderr，进程日志不可用"
+              : `${healthMessage(endpoints, health) ?? "健康检查未完全就绪"}；Hub ownership 已恢复，进程日志不可用`
           : build.state === "failed"
             ? `${endpointHealth === "ready" ? "端口健康但当前构建失败" : endpointHealth === "reachable" ? "端口可达但当前构建失败" : "当前构建失败"}：${build.message ?? "编译器报告错误"}`
             : build.state === "building" && (endpointHealth === "ready" || endpointHealth === "reachable")
@@ -453,14 +526,16 @@ export class PdhServiceManager {
   async logs(serviceId: string, afterSequence = 0, generation?: number): Promise<ServiceLogsResponse> {
     const status = await this.status(serviceId);
     const logBuffer = this.#logs.get(serviceId)!;
-    if (status.logSource === "monitoring-only") {
+    if (status.logSource !== "captured") {
       return {
         serviceId,
         ...logBuffer.snapshot(logBuffer.nextSequence, logBuffer.generation),
         entries: [],
         available: false,
-        source: "monitoring-only",
-        message: "仅健康监控：外部进程未向 Hub 提供 stdout/stderr 或配置日志文件，进程日志不可用",
+        source: status.logSource,
+        message: status.logSource === "recovered-ownership"
+          ? "Hub ownership 已恢复，但新 Hub 无法重新接入原 stdout/stderr 管道，进程日志不可用"
+          : "仅健康监控：外部进程未向 Hub 提供 stdout/stderr 或配置日志文件，进程日志不可用",
       };
     }
     return {
@@ -474,14 +549,16 @@ export class PdhServiceManager {
   async clearLogs(serviceId: string): Promise<ServiceLogsResponse> {
     const status = await this.status(serviceId);
     const logBuffer = this.#logs.get(serviceId)!;
-    if (status.logSource === "monitoring-only") {
+    if (status.logSource !== "captured") {
       return {
         serviceId,
         ...logBuffer.snapshot(logBuffer.nextSequence, logBuffer.generation),
         entries: [],
         available: false,
-        source: "monitoring-only",
-        message: "仅健康监控：没有可由 Hub 清空的外部进程日志",
+        source: status.logSource,
+        message: status.logSource === "recovered-ownership"
+          ? "Hub ownership 已恢复，但没有可由当前 Hub 清空的进程日志"
+          : "仅健康监控：没有可由 Hub 清空的外部进程日志",
       };
     }
     return {
@@ -615,9 +692,30 @@ export class PdhServiceManager {
       ownershipId: randomUUID(),
       startedAt: new Date().toISOString(),
       build: new PdhBuildOutputTracker(),
+      recovered: false,
+      recoveryAnnounced: true,
       stopping: false,
     };
     this.#managed.set(serviceId, managed);
+    try {
+      this.#ownershipPersistence.put({
+        serviceId,
+        ownershipId: managed.ownershipId,
+        root,
+        startedAt: managed.startedAt,
+        ports: definition.endpoints.map((endpoint) => endpoint.port),
+        definitionIdentity: pdhServiceDefinitionIdentity(definition),
+      });
+    } catch (error) {
+      this.#managed.delete(serviceId);
+      child.kill("SIGTERM");
+      throw new DevHubError(
+        "OWNERSHIP_PERSIST_FAILED",
+        `无法持久化 ${definition.name} 的 ownership，已取消启动`,
+        500,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
     this.#lastExit.delete(serviceId);
     logBuffer.append(
       "system",
@@ -640,6 +738,7 @@ export class PdhServiceManager {
       if (this.#managed.get(serviceId)?.ownershipId === managed.ownershipId) {
         this.#managed.delete(serviceId);
       }
+      this.#ownershipPersistence.delete(serviceId, managed.ownershipId);
       this.#lastExit.set(serviceId, {
         exitedAt: new Date().toISOString(),
         exitCode,
@@ -782,6 +881,7 @@ export class PdhServiceManager {
     const currentRoot = await describeProcess(managed.root.pid);
     if (!sameProcessIdentity(managed.root, currentRoot)) {
       this.#managed.delete(serviceId);
+      this.#ownershipPersistence.delete(serviceId, managed.ownershipId);
       throw new DevHubError(
         "OWNERSHIP_STALE",
         "Hub ownership 已过期或 PID 被复用，已取消停止并重新检测",
@@ -797,6 +897,7 @@ export class PdhServiceManager {
     await this.#signalGroups(intent.processGroupIds, "SIGTERM");
     if (await this.#waitForTargetExit(intent, STOP_TIMEOUT_MS)) {
       this.#managed.delete(serviceId);
+      this.#ownershipPersistence.delete(serviceId, managed.ownershipId);
       return this.status(serviceId);
     }
 
@@ -810,6 +911,7 @@ export class PdhServiceManager {
       await this.#signalGroups(forceIntent.processGroupIds, "SIGKILL");
       await this.#waitForTargetExit(forceIntent, FORCE_TIMEOUT_MS);
       this.#managed.delete(serviceId);
+      this.#ownershipPersistence.delete(serviceId, managed.ownershipId);
       return this.status(serviceId);
     }
     this.#stopIntents.set(forceIntent.token, forceIntent);
@@ -832,7 +934,10 @@ export class PdhServiceManager {
     if (!(await this.#waitForTargetExit(intent, FORCE_TIMEOUT_MS))) {
       throw new DevHubError("FORCE_STOP_FAILED", "强制终止后目标进程或端口仍存在", 500);
     }
-    if (intent.ownership === "hub") this.#managed.delete(serviceId);
+    if (intent.ownership === "hub") {
+      this.#managed.delete(serviceId);
+      this.#ownershipPersistence.delete(serviceId, intent.ownershipId);
+    }
     return this.status(serviceId);
   }
 

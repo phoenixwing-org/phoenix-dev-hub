@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import type { LogEntry } from "@shared/contracts";
+import { pdhDisplayLogText, pdhRuntimeLogClipboardText } from "../PdhRuntimeLogText";
 
 defineOptions({ name: "PdhLogPanel" });
-defineProps<{
+const props = defineProps<{
   entries: readonly LogEntry[];
   serviceName?: string;
   logTabCount: number;
@@ -12,19 +14,26 @@ defineProps<{
   totalWritten?: number;
   message?: string;
 }>();
+const copyFeedback = ref("");
 const emit = defineEmits<{
   clear: [];
   close: [];
   closeAll: [];
 }>();
 
-function displayLogText(text: string): string {
-  return text.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, "");
+async function copyLogs(): Promise<void> {
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+    await navigator.clipboard.writeText(pdhRuntimeLogClipboardText(props.entries));
+    copyFeedback.value = `已复制 ${props.entries.length} 条`;
+  } catch {
+    copyFeedback.value = "复制失败，请直接选择日志文本复制";
+  }
 }
 
 function logTone(entry: LogEntry): "default" | "warning" | "error" {
   if (entry.stream !== "stderr") return "default";
-  const text = displayLogText(entry.text);
+  const text = pdhDisplayLogText(entry.text);
   if (/warning|deprecated|deprecation|browserslist|caniuse-lite|update-browserslist-db|trace-deprecation/i.test(text)) {
     return "warning";
   }
@@ -44,9 +53,11 @@ function logTone(entry: LogEntry): "default" | "warning" | "error" {
         <small v-else-if="serviceName">仅健康监控</small>
       </span>
       <div v-if="serviceName" class="log-actions">
+        <button type="button" :disabled="!entries.length" @click="copyLogs">复制当前日志</button>
         <button type="button" :disabled="!available" @click="emit('clear')">清空本次会话日志</button>
         <button type="button" @click="emit('close')">关闭日志</button>
         <button v-if="logTabCount > 1" type="button" @click="emit('closeAll')">关闭全部</button>
+        <small role="status" aria-live="polite">{{ copyFeedback }}</small>
       </div>
     </div>
     <ol v-if="entries.length">
@@ -58,7 +69,7 @@ function logTone(entry: LogEntry): "default" | "warning" | "error" {
       >
         <time>{{ new Date(entry.timestamp).toLocaleTimeString('zh-CN', { hour12: false }) }}</time>
         <b>{{ entry.stream }}</b>
-        <span>{{ displayLogText(entry.text) }}</span>
+        <span>{{ pdhDisplayLogText(entry.text) }}</span>
       </li>
     </ol>
     <p v-else class="empty-log">
@@ -76,7 +87,8 @@ function logTone(entry: LogEntry): "default" | "warning" | "error" {
 .log-toolbar button:hover { color: var(--pnw-control-active-text, var(--pnw-workbench-default-active-text, #1d4ed8)); }
 .log-toolbar button:disabled { opacity: .45; cursor: not-allowed; }
 .log-actions { display: flex; align-items: center; gap: 10px; }
-ol { flex: 1; overflow: auto; list-style: none; margin: 0; padding: 7px 9px; }
+.log-actions small { min-width: 0; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); }
+ol { flex: 1; overflow: auto; list-style: none; margin: 0; padding: 7px 9px; user-select: text; cursor: text; }
 li { display: grid; grid-template-columns: 66px 48px minmax(0, 1fr); gap: 7px; white-space: pre-wrap; overflow-wrap: anywhere; }
 li time { color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); }
 li b { color: var(--pnw-control-active-text, var(--pnw-workbench-default-active-text, #1d4ed8)); font-weight: 600; }

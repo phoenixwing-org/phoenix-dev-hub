@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ServiceLogBuffer } from "./logBuffer.js";
+import { pdhSanitizeServiceLogText, ServiceLogBuffer } from "./logBuffer.js";
 
 describe("ServiceLogBuffer", () => {
   it("按行合并数据块并保留递增序号", () => {
@@ -46,5 +46,31 @@ describe("ServiceLogBuffer", () => {
       totalWritten: 1,
       nextSequence: 2,
     });
+  });
+
+  it("进入缓冲前清洗凭据，同时保留路径和插件状态诊断", () => {
+    const logs = new ServiceLogBuffer(10);
+    logs.append("stdout", "cwd=/Users/kathy/phoenix state=quarantined password=123456");
+    logs.append("stderr", "Authorization: Bearer jwt-secret ticket='once-only'");
+    logs.append("system", "postgres://admin:db-secret@localhost:5432/sample?access_token=abc");
+
+    const text = logs.snapshot().entries.map((entry) => entry.text).join("\n");
+    expect(text).toContain("cwd=/Users/kathy/phoenix");
+    expect(text).toContain("state=quarantined");
+    expect(text).toContain("password=[REDACTED]");
+    expect(text).toContain("Bearer [REDACTED]");
+    expect(text).toContain("ticket='[REDACTED]'");
+    expect(text).toContain("postgres://admin:[REDACTED]@localhost:5432/sample");
+    expect(text).toContain("access_token=[REDACTED]");
+    expect(text).not.toMatch(/123456|jwt-secret|once-only|db-secret|access_token=abc/);
+  });
+
+  it("可独立清洗 JSON 和普通 key-value 日志", () => {
+    expect(pdhSanitizeServiceLogText('{"refreshToken":"private","ok":true}')).toBe(
+      '{"refreshToken":"[REDACTED]","ok":true}',
+    );
+    expect(pdhSanitizeServiceLogText("client_secret=private; phase=ready")).toBe(
+      "client_secret=[REDACTED]; phase=ready",
+    );
   });
 });

@@ -1,5 +1,25 @@
 import type { LogEntry } from "../shared/contracts.js";
 
+const SENSITIVE_KEY = "(?:password|passwd|pwd|access_?token|refresh_?token|token|client_?secret|app_?secret|secret|captcha|verify_?code|ticket|oauth_?code)";
+const SENSITIVE_KEY_VALUE = new RegExp(
+  `(["']?${SENSITIVE_KEY}["']?\\s*[:=]\\s*)(?:"[^"]*"|'[^']*'|[^,;\\s}]+)`,
+  "gi",
+);
+
+export function pdhSanitizeServiceLogText(text: string): string {
+  return text
+    .replace(/(\bAuthorization\s*[:=]\s*)(Bearer|Basic)\s+\S+/gi, "$1$2 [REDACTED]")
+    .replace(/(\bAuthorization\s*[:=]\s*)(?!Bearer\b|Basic\b)\S+/gi, "$1[REDACTED]")
+    .replace(/(Bearer\s+)\S+/gi, "$1[REDACTED]")
+    .replace(/([a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:)[^@\s/]+@/gi, "$1[REDACTED]@")
+    .replace(new RegExp(`([?&]${SENSITIVE_KEY}=)[^&\\s]*`, "gi"), "$1[REDACTED]")
+    .replace(SENSITIVE_KEY_VALUE, (match, prefix: string) => {
+      const value = match.slice(prefix.length);
+      const quote = value[0] === '"' || value[0] === "'" ? value[0] : "";
+      return `${prefix}${quote}[REDACTED]${quote}`;
+    });
+}
+
 export class ServiceLogBuffer {
   readonly #entries: LogEntry[] = [];
   readonly #partial = new Map<"stdout" | "stderr", string>();
@@ -76,7 +96,7 @@ export class ServiceLogBuffer {
       sequence: this.#sequence++,
       timestamp: new Date().toISOString(),
       stream,
-      text,
+      text: pdhSanitizeServiceLogText(text),
     });
     this.#totalWritten += 1;
     if (this.#entries.length > this.capacity) {

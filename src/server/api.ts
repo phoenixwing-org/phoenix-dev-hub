@@ -379,7 +379,7 @@ export function createApiHandler(
         if (authorization && apiStatus.health === "ready") {
           try {
             const list = await adminApiJson(
-              `${apiBase}/admin/pah/plugin/list`,
+              `${apiBase}/admin/phoenix/plugin/list`,
               authorization,
               { method: "POST", body: "{}" },
             );
@@ -438,7 +438,7 @@ export function createApiHandler(
           throw new DevHubError("ADMIN_PLUGIN_HAS_NO_DDL", "该插件没有声明 DDL migration", 409);
         }
         const apiBase = serviceLoopbackBase(manager, workspace.settings().adminApiServiceId);
-        const endpoint = `${apiBase}/admin/pah/plugin/migration-plan?moduleId=${encodeURIComponent(plugin.candidate.manifest.moduleId)}`;
+        const endpoint = `${apiBase}/admin/phoenix/plugin/migration-plan?moduleId=${encodeURIComponent(plugin.candidate.manifest.moduleId)}`;
         const plan = await adminApiJson(endpoint, authorization);
         const result: AdminPluginDryRunResponse = {
           moduleId: plugin.candidate.manifest.moduleId,

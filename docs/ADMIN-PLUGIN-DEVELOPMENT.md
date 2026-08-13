@@ -25,8 +25,9 @@ Admin 插件开发工作区是 Phoenix Admin Host 的本机定制开发能力，
 仓库提供 [`config/admin-plugins.sample.json`](../config/admin-plugins.sample.json)。复制为
 `.runtime/admin-plugins.json` 后，相对路径以 Hub 根目录解析，便于同级 Phoenix 工作区直接参考；
 不存在的示例插件应删除。该文件只建立登记，不创建 symlink。sample 保留空的 `operations: {}`
-说明运行时节点；操作记录与挂载状态由 Hub 在用户显式执行“开发挂载 / 开发卸载 / 修改目录”后
-自动维护，不应由用户或 AI 预填为成功。
+说明运行时节点；操作记录与链接状态由 Hub 在用户显式执行“开发挂载 / 开发卸载 / 修改目录”后
+自动维护，不应由用户或 AI 预填为成功。插件运行健康、实体聚合、Pah lifecycle 和品牌安全状态由
+Phoenix Admin Host 在自身启动时判断，不写回该 Hub 文件。
 
 其中 Open Issue 条目作为开发挂载示例：复制登记后，在 View 中选择对应插件并点击
 “开发挂载”，或调用 `POST /api/admin-plugins/<plugin-id>/mount`。必须由 Hub 后端完成实时身份检查和
@@ -74,8 +75,13 @@ Hub 不生成产品菜单映射，也不按 Issue、Function、BOM 产品名添�
 2. 预检两个源目录、目标路径和现有 symlink 身份；
 3. 拒绝覆盖实体目录、文件和指向其他版本的外来链接；
 4. 创建两个相对 symlink；
-5. 在两个 Host 的 `.git/info/exclude` 写入该 `moduleId` 的受控 marker；
+5. 在两个 Host 的 `.git/info/exclude` 写入该 `moduleId` 的受控 Git exclude marker；
 6. 记录最近一次操作的每条变化。
+
+Hub 不调用 Admin Node 的实体生成器，也不生成第二份插件身份 marker。Node 的标准
+`dev`、`typecheck` 和 `build` 命令会在编译前扫描实际 `src/modules/<moduleId>` 并原子重建
+`src/entities.plugin.ts`；Web/API 各自在启动时完成插件快速点检和故障隔离。这样直接运行标准命令、
+经 Hub 启动和正式装配使用同一 Host 规则。
 
 “开发卸载”只移除身份重新核验后、确实指向当前插件源目录的 symlink 和对应 marker。
 它不是 Pah 的业务卸载，不删除产品目录、数据库、迁移台账、菜单或业务数据。损坏、嵌套、
@@ -130,8 +136,9 @@ exclude 与登记；若自动回滚本身不完整，API 返回 `ADMIN_PLUGIN_RE
 - `/function-develop/catalog`；
 - `/bom-studio/boms`。
 
-数据库初始化、迁移、seed、Pah register/install/enable 与权限变更都不属于这个开发 View；
-Hub 只负责启动 Host、识别插件、修改开发目录和管理 Vue/Node symlink。
+数据库初始化、迁移、seed、Pah register/install/enable、实体聚合、品牌安全审查与权限变更都不属于
+这个开发 View；Hub 只负责检查候选包的装配元数据、修改开发目录、管理 Vue/Node symlink，以及
+启动/监控 Host。插件运行状态以 Host 返回的 `ready`、`action-required` 或 `quarantined` 为准。
 
 ## 退出与恢复
 

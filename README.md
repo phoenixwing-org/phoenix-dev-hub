@@ -167,8 +167,9 @@ curl -X POST -H 'Content-Type: application/json' -d '{}' \
   http://127.0.0.1:42100/api/admin-plugins/phoenix-open-issue-local/mount
 ```
 
-后端会重新检查 Manifest、moduleId、源目录、Host 目标、现有链接和 Git marker；存在实体目录或外来
-链接时拒绝覆盖。不要由 AI 直接创建链接或手写成功状态。
+后端会重新检查 Manifest、moduleId、源目录、Host 目标、现有链接和 Git exclude marker；存在实体
+目录或外来链接时拒绝覆盖。不要由 AI 直接创建链接或手写成功状态。Hub 不生成插件实体或运行健康
+状态；这些由 Admin Host 标准启动命令根据实际模块目录完成。
 
 Phoenix Admin Development 的 sample 命令保持为纯 `pnpm dev`，数据库初始化、seed、迁移和插件生命周期
 由开发者在 Hub 之外处理。发布验收若需要数据库安全门禁，应使用独立 Profile；真实数据库名、Host commit、

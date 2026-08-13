@@ -571,7 +571,6 @@ export interface AdminPluginOperationChange {
     | "claimed-link"
     | "added-exclude"
     | "removed-exclude"
-    | "synced-entities"
     | "unchanged";
   readonly path: string;
   readonly detail: string;

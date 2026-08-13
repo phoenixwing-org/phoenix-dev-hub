@@ -49,15 +49,6 @@ interface ManagedBlockParseResult {
   readonly blocks: readonly (readonly string[])[];
 }
 
-interface RuntimeEntitySyncResult {
-  readonly count: number;
-  readonly sha256: string;
-}
-
-interface AdminPluginWorkspaceRuntime {
-  readonly syncRuntimeEntities?: (adminNodeRoot: string) => RuntimeEntitySyncResult;
-}
-
 const MODULE_ID_PATTERN = /^[a-z][a-z0-9-]{1,63}$/;
 const CHECKSUM_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const MIGRATION_PATH_PATTERN = /^migrations\/[a-zA-Z0-9][a-zA-Z0-9._/-]*\.sql$/;
@@ -324,44 +315,6 @@ function writeAtomic(file: string, content: string, mode = 0o600): void {
   renameSync(temporary, file);
 }
 
-function syncAdminNodeRuntimeEntities(adminNodeRoot: string): RuntimeEntitySyncResult {
-  const script = path.join(adminNodeRoot, "scripts/pah-sync-runtime-entities.cjs");
-  if (!existsSync(script)) {
-    return fail(
-      "ADMIN_PLUGIN_ENTITY_SYNC_UNAVAILABLE",
-      `Admin Node 缺少实体同步器：${script}`,
-      409,
-    );
-  }
-  let output: string;
-  try {
-    output = execFileSync(process.execPath, [script, "--root", adminNodeRoot], {
-      cwd: adminNodeRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 15_000,
-    }).trim();
-  } catch (error) {
-    const detail = error && typeof error === "object" && "stderr" in error
-      ? String((error as { stderr?: unknown }).stderr ?? "").trim()
-      : "";
-    return fail(
-      "ADMIN_PLUGIN_ENTITY_SYNC_FAILED",
-      `Admin Node 实体同步失败${detail ? `：${detail}` : ""}`,
-      500,
-    );
-  }
-  const match = output.match(/count=(\d+)\s+sha256=([a-f0-9]{64})/);
-  if (!match) {
-    return fail(
-      "ADMIN_PLUGIN_ENTITY_SYNC_INVALID_OUTPUT",
-      `Admin Node 实体同步器输出不符合契约：${output || "<empty>"}`,
-      500,
-    );
-  }
-  return { count: Number(match[1]), sha256: match[2]! };
-}
-
 function assertRealParentContained(hostRoot: string, target: string): void {
   let candidate = path.dirname(target);
   while (!existsSync(candidate)) {
@@ -383,12 +336,10 @@ export class PdhAdminPluginWorkspace {
   #settings: AdminPluginWorkspaceSettings;
   #plugins: AdminPluginRegistration[];
   #operations: Record<string, AdminPluginOperationResult>;
-  readonly #syncRuntimeEntities: (adminNodeRoot: string) => RuntimeEntitySyncResult;
 
   constructor(
     projectRoot: string,
     defaults?: Partial<AdminPluginWorkspaceSettings>,
-    runtime: AdminPluginWorkspaceRuntime = {},
   ) {
     this.#projectRoot = realDirectory(projectRoot, "Dev Hub 根目录");
     this.#configPath = path.join(this.#projectRoot, ".runtime/admin-plugins.json");
@@ -404,18 +355,6 @@ export class PdhAdminPluginWorkspace {
     this.#settings = loaded.settings;
     this.#plugins = [...loaded.plugins];
     this.#operations = { ...(loaded.operations ?? {}) };
-    this.#syncRuntimeEntities = runtime.syncRuntimeEntities ?? syncAdminNodeRuntimeEntities;
-  }
-
-  #syncEntityChange(changes: AdminPluginOperationChange[]): void {
-    const nodeRoot = exactGitRoot(this.#settings.adminNodeRoot, "Admin Node 根目录");
-    const result = this.#syncRuntimeEntities(nodeRoot);
-    changes.push({
-      kind: "node",
-      action: "synced-entities",
-      path: path.join(nodeRoot, "src/entities.plugin.ts"),
-      detail: `${result.count} 个实体，sha256:${result.sha256}`,
-    });
   }
 
   settings(): AdminPluginWorkspaceSettings {
@@ -727,7 +666,6 @@ export class PdhAdminPluginWorkspace {
           detail: excludeChanged ? this.#excludePattern(entry.target) : "Git 本机排除已经受控",
         });
       }
-      this.#syncEntityChange(changes);
       const updated: AdminPluginRegistration = {
         ...registration,
         productRoot: candidate.productRoot,
@@ -759,11 +697,6 @@ export class PdhAdminPluginWorkspace {
         } catch (rollbackError) {
           rollbackErrors.push(rollbackError instanceof Error ? rollbackError.message : String(rollbackError));
         }
-      }
-      try {
-        this.#syncRuntimeEntities(exactGitRoot(this.#settings.adminNodeRoot, "Admin Node 根目录"));
-      } catch (rollbackError) {
-        rollbackErrors.push(`实体清单恢复失败：${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
       }
       this.#plugins = previousPlugins;
       if (previousOperation) this.#operations[id] = previousOperation;
@@ -897,7 +830,6 @@ export class PdhAdminPluginWorkspace {
           });
         }
       }
-      this.#syncEntityChange(changes);
     } catch (error) {
       for (const target of created.reverse()) {
         try { if (lstatSync(target).isSymbolicLink()) unlinkSync(target); } catch { /* best effort rollback */ }
@@ -911,19 +843,6 @@ export class PdhAdminPluginWorkspace {
       }
       for (const entry of originals) {
         try { writeAtomic(entry.excludePath, entry.excludeContent); } catch { /* preserve original error */ }
-      }
-      try {
-        this.#syncRuntimeEntities(exactGitRoot(this.#settings.adminNodeRoot, "Admin Node 根目录"));
-      } catch (rollbackError) {
-        return fail(
-          "ADMIN_PLUGIN_ENTITY_SYNC_ROLLBACK_FAILED",
-          `开发${action === "mount" ? "挂载" : "卸载"}失败，且实体清单自动恢复失败`,
-          500,
-          {
-            originalError: error instanceof Error ? error.message : String(error),
-            rollbackError: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
-          },
-        );
       }
       throw error;
     }

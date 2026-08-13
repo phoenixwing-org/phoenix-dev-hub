@@ -19,11 +19,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { PdhAdminPluginWorkspace } from "./PdhAdminPluginWorkspace.js";
 
 const roots: string[] = [];
-const entityDigest = "a".repeat(64);
-
-function runtimeEntitySync() {
-  return { count: 0, sha256: entityDigest };
-}
 
 function gitRoot(directory: string): void {
   mkdirSync(directory, { recursive: true });
@@ -94,11 +89,10 @@ function fixture(): {
     hub,
     web,
     node,
-    workspace: new PdhAdminPluginWorkspace(
-      hub,
-      { adminWebRoot: web, adminNodeRoot: node },
-      { syncRuntimeEntities: runtimeEntitySync },
-    ),
+    workspace: new PdhAdminPluginWorkspace(hub, {
+      adminWebRoot: web,
+      adminNodeRoot: node,
+    }),
   };
 }
 
@@ -127,11 +121,8 @@ describe("Admin 插件开发工作区", () => {
     expect(mounted.mounts).toHaveLength(2);
     expect(mounted.mounts.every((entry) => entry.linkState === "mounted" && entry.excludeState === "managed")).toBe(true);
     expect(mounted.recentOperation?.changes.some((change) => change.action === "created-link")).toBe(true);
-    expect(mounted.recentOperation?.changes).toContainEqual(expect.objectContaining({
-      kind: "node",
-      action: "synced-entities",
-      detail: `0 个实体，sha256:${entityDigest}`,
-    }));
+    expect(mounted.recentOperation?.changes.map((change) => String(change.action)))
+      .not.toContain("synced-entities");
     for (const entry of mounted.mounts) {
       expect(readlinkSync(entry.target)).toBe(path.relative(path.dirname(entry.target), entry.source));
       expect(readFileSync(entry.excludePath, "utf8")).toContain(entry.excludePattern);
@@ -143,47 +134,9 @@ describe("Admin 插件开发工作区", () => {
     expect(current.workspace.remove(added.registration.id).id).toBe(added.registration.id);
   });
 
-  it("实体同步失败时恢复卸载前链接与 Git exclude，且回滚后可重试", () => {
+  it("只管理双端链接与 Git exclude，不执行 Admin Node 内部实体脚本", () => {
     const current = fixture();
-    let failNext = false;
-    let syncCount = 0;
-    const workspace = new PdhAdminPluginWorkspace(
-      current.hub,
-      { adminWebRoot: current.web, adminNodeRoot: current.node },
-      {
-        syncRuntimeEntities: () => {
-          syncCount += 1;
-          if (failNext) {
-            failNext = false;
-            throw new Error("fixture entity sync failed");
-          }
-          return runtimeEntitySync();
-        },
-      },
-    );
-    const added = workspace.add(pluginFixture(current.root));
-    const mounted = workspace.mount(added.registration.id);
-    failNext = true;
-
-    expect(() => workspace.unmount(added.registration.id)).toThrow(
-      "fixture entity sync failed"
-    );
-    const rolledBack = workspace.status(added.registration.id);
-    expect(rolledBack.mountState).toBe("mounted");
-    for (const mount of rolledBack.mounts) {
-      expect(realpathSync(mount.target)).toBe(mount.source);
-      expect(readFileSync(mount.excludePath, "utf8")).toContain(
-        mount.excludePattern
-      );
-    }
-    expect(syncCount).toBe(3);
-    expect(workspace.unmount(added.registration.id).mountState).toBe(
-      "unmounted"
-    );
-  });
-
-  it("默认执行器在挂载与卸载后调用 Admin Node 自带实体同步脚本", () => {
-    const current = fixture();
+    const sentinel = path.join(current.node, "entity-sync-was-called");
     const script = path.join(
       current.node,
       "scripts",
@@ -192,13 +145,7 @@ describe("Admin 插件开发工作区", () => {
     mkdirSync(path.dirname(script), { recursive: true });
     writeFileSync(
       script,
-      `const fs = require("node:fs");\n` +
-        `const path = require("node:path");\n` +
-        `const root = process.argv[process.argv.indexOf("--root") + 1];\n` +
-        `const mounted = fs.existsSync(path.join(root, "src/modules/example-admin-plugin"));\n` +
-        `fs.mkdirSync(path.join(root, "src"), { recursive: true });\n` +
-        `fs.writeFileSync(path.join(root, "src/entities.plugin.ts"), mounted ? "mounted\\n" : "empty\\n");\n` +
-        `process.stdout.write("[Pah entities] synchronized count=" + (mounted ? 1 : 0) + " sha256=" + "b".repeat(64) + "\\n");\n`,
+      `require("node:fs").writeFileSync(${JSON.stringify(sentinel)}, "called\\n");\n`,
     );
     const workspace = new PdhAdminPluginWorkspace(current.hub, {
       adminWebRoot: current.web,
@@ -206,17 +153,11 @@ describe("Admin 插件开发工作区", () => {
     });
     const added = workspace.add(pluginFixture(current.root));
 
-    expect(workspace.mount(added.registration.id).recentOperation?.changes)
-      .toContainEqual(expect.objectContaining({
-        action: "synced-entities",
-        detail: `1 个实体，sha256:${"b".repeat(64)}`,
-      }));
-    expect(readFileSync(path.join(current.node, "src/entities.plugin.ts"), "utf8"))
-      .toBe("mounted\n");
-
+    const mounted = workspace.mount(added.registration.id);
+    expect(mounted.mountState).toBe("mounted");
+    expect(existsSync(sentinel)).toBe(false);
     workspace.unmount(added.registration.id);
-    expect(readFileSync(path.join(current.node, "src/entities.plugin.ts"), "utf8"))
-      .toBe("empty\n");
+    expect(existsSync(sentinel)).toBe(false);
   });
 
   it("拒绝覆盖实体目录、外来版本链接和未开发卸载的列表移除", () => {
@@ -300,14 +241,10 @@ describe("Admin 插件开发工作区", () => {
     unlinkSync(mounted.mounts.find((mount) => mount.kind === "node")!.target);
     rmSync(oldProduct, { recursive: true, force: true });
 
-    const legacy = new PdhAdminPluginWorkspace(
-      current.hub,
-      {
-        adminWebRoot: current.web,
-        adminNodeRoot: current.node,
-      },
-      { syncRuntimeEntities: runtimeEntitySync },
-    );
+    const legacy = new PdhAdminPluginWorkspace(current.hub, {
+      adminWebRoot: current.web,
+      adminNodeRoot: current.node,
+    });
     expect(legacy.status(added.registration.id)).toMatchObject({
       sourceState: "unavailable",
       identity: { moduleId: undefined },
@@ -339,14 +276,10 @@ describe("Admin 插件开发工作区", () => {
     for (const mount of mounted.mounts) unlinkSync(mount.target);
     rmSync(oldProduct, { recursive: true, force: true });
 
-    const legacy = new PdhAdminPluginWorkspace(
-      current.hub,
-      {
-        adminWebRoot: current.web,
-        adminNodeRoot: current.node,
-      },
-      { syncRuntimeEntities: runtimeEntitySync },
-    );
+    const legacy = new PdhAdminPluginWorkspace(current.hub, {
+      adminWebRoot: current.web,
+      adminNodeRoot: current.node,
+    });
     const newProduct = pluginFixture(current.root, "0.2.0");
     expect(() => legacy.repoint(added.registration.id, newProduct)).toThrow("不会根据登记 ID 猜测模块身份");
   });
@@ -393,11 +326,10 @@ describe("Admin 插件开发工作区", () => {
       expect(realpathSync(mount.target)).toBe(mount.source);
       expect(readFileSync(mount.excludePath, "utf8")).toContain(mount.excludePattern);
     }
-    const reloaded = new PdhAdminPluginWorkspace(
-      current.hub,
-      { adminWebRoot: current.web, adminNodeRoot: current.node },
-      { syncRuntimeEntities: runtimeEntitySync },
-    );
+    const reloaded = new PdhAdminPluginWorkspace(current.hub, {
+      adminWebRoot: current.web,
+      adminNodeRoot: current.node,
+    });
     expect(reloaded.status(added.registration.id).registration.productRoot).toBe(realpathSync(oldProduct));
   });
 
@@ -466,11 +398,7 @@ describe("Admin 插件开发工作区", () => {
       }],
     }, null, 2));
 
-    const workspace = new PdhAdminPluginWorkspace(
-      current.hub,
-      undefined,
-      { syncRuntimeEntities: runtimeEntitySync },
-    );
+    const workspace = new PdhAdminPluginWorkspace(current.hub);
     expect(workspace.settings()).toMatchObject({
       adminWebRoot: realpathSync(current.web),
       adminNodeRoot: realpathSync(current.node),

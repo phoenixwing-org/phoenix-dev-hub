@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createServer, type Server } from "node:http";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -57,11 +57,10 @@ async function fixture(): Promise<{ baseUrl: string; product: string; root: stri
   initGit(node);
   const product = createPlugin(root);
   const manager = new PdhServiceManager([]);
-  const workspace = new PdhAdminPluginWorkspace(
-    hub,
-    { adminWebRoot: web, adminNodeRoot: node },
-    { syncRuntimeEntities: () => ({ count: 0, sha256: "a".repeat(64) }) },
-  );
+  const workspace = new PdhAdminPluginWorkspace(hub, {
+    adminWebRoot: web,
+    adminNodeRoot: node,
+  });
   const handler = createApiHandler(
     manager,
     new PdhProjectConfigStore(hub),
@@ -96,6 +95,13 @@ afterEach(async () => {
 });
 
 describe("Admin 插件工作区 API", () => {
+  it("只调用 Phoenix 插件管理 API，不重新开放旧 Pah 插件入口", () => {
+    const source = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    expect(source).toContain("/admin/phoenix/plugin/list");
+    expect(source).toContain("/admin/phoenix/plugin/migration-plan");
+    expect(source).not.toContain("/admin/pah/plugin");
+  });
+
   it("完成 inspect/add/status/mount/unmount/remove 闭环", async () => {
     const current = await fixture();
     const inspected = await request<{ configured: boolean; manifest: { moduleId: string } }>(

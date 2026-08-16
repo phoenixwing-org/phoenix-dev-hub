@@ -106,6 +106,8 @@ cp config/services.sample.json config/services.user.json
 
 Hub 不会自动执行 sample；复制后必须复核 `.worktrees`、commit、SHA、integrity、数据库与端口。`services.user.json` 不进入 Git，由使用者与 `.runtime` 一起自行备份。为兼容早期安装，未迁移的 `config/services.json` 仍可读取，但也已受 Git 忽略。加载优先级为 `services.user.json`、旧 `services.json`；两者都不存在时启动会明确提示初始化。每个实际清单项必须包含：
 
+已经保存的配置若只是工作目录或发布包路径暂时不存在，Hub 仍会启动并保留对应条目；后端只汇总输出一次警告，网页显示具体配置错误，并在 spawn 前拒绝启动该条目。JSON 结构、服务 ID、端口及安全策略等配置仍按严格规则校验。
+
 Midway 4 sample 中的 `MIDWAY4_DB_USERNAME=replace-me` 必须在用户配置中替换；密码只从 Hub 进程继承的 `MIDWAY4_DB_PASSWORD` 或 `PGPASSWORD` 读取，不写入 sample。该 Profile 仅允许 loopback 和数据库 `cool_admin_midway4_validation`，其中 `synchronize/initDB/initMenu` 只用于纯 Cool 阶段 A 的隔离开发联调，不得指向共享、发布验收或生产数据库。
 
 - 稳定的进程 `id`、显示名称，以及网站 `moduleId` / `moduleName`；

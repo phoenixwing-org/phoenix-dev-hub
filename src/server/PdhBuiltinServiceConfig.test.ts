@@ -61,6 +61,47 @@ afterEach(() => {
 });
 
 describe("PdhBuiltinServiceConfigStore", () => {
+  it("本机覆盖的工作目录失效时保留条目和配置错误，不阻断 Store/Hub 加载", () => {
+    const { root, baseline } = fixture();
+    const source = configurationFromDefinitions([baseline]);
+    const series = structuredClone(source.series[0]!);
+    const missingRoot = path.join(root, "removed-worktree", "web");
+    for (const service of Object.values(series.template.services)) {
+      if (service) service.cwd = missingRoot;
+    }
+    for (const profile of series.profiles) {
+      for (const service of Object.values(profile.services)) {
+        if (service) service.cwd = missingRoot;
+      }
+    }
+    const runtimeFile = path.join(root, ".runtime/services.json");
+    mkdirSync(path.dirname(runtimeFile));
+    const original = JSON.stringify({
+      version: 3,
+      seriesOverrides: [series],
+      baselineProfileIds: { [series.id]: series.profiles.map((profile) => profile.id) },
+      removed: [],
+    });
+    writeFileSync(runtimeFile, original);
+
+    const store = new PdhBuiltinServiceConfigStore(root, {
+      source,
+      definitions: resolveServiceConfiguration(source, root),
+    });
+
+    expect(store.effectiveDefinitions()).toEqual([
+      expect.objectContaining({
+        id: baseline.id,
+        cwd: missingRoot,
+        configurationErrors: [expect.stringContaining("工作目录不存在")],
+      }),
+    ]);
+    expect(store.catalog().services[0]?.definition).toMatchObject({
+      configurationErrors: [expect.stringContaining(missingRoot)],
+    });
+    expect(readFileSync(runtimeFile, "utf8")).toBe(original);
+  });
+
   it("区分仓库基线、本机覆盖和移除，并可重置恢复", () => {
     const { root, baseline } = fixture();
     const store = new PdhBuiltinServiceConfigStore(root, [baseline]);

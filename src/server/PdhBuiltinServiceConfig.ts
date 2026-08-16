@@ -414,7 +414,11 @@ export class PdhBuiltinServiceConfigStore {
     return this.effectiveDefinitions();
   }
 
-  #setServiceOverride(current: ServiceDefinition, input: ServiceDefinition): void {
+  #setServiceOverride(
+    current: ServiceDefinition,
+    input: ServiceDefinition,
+    tolerateUnavailablePaths = false,
+  ): void {
     const seriesId = current.seriesId ?? current.moduleId;
     const profileId = current.profileId ?? "default";
     const role = current.serviceRole ?? current.id;
@@ -436,7 +440,7 @@ export class PdhBuiltinServiceConfigStore {
     const baseline = this.#baselineSeries.get(seriesId);
     if (baseline && sameJson(nextSeries, baseline)) this.#seriesOverrides.delete(seriesId);
     else this.#seriesOverrides.set(seriesId, nextSeries);
-    this.#validateSource(this.sourceDocument());
+    this.#validateSource(this.sourceDocument(), tolerateUnavailablePaths);
   }
 
   #decorate(definition: ServiceDefinition, overridden: boolean): ServiceDefinition {
@@ -447,9 +451,11 @@ export class PdhBuiltinServiceConfigStore {
     };
   }
 
-  #parseDefinition(value: unknown): ServiceDefinition {
+  #parseDefinition(value: unknown, tolerateUnavailablePaths = false): ServiceDefinition {
     try {
-      return cleanDefinition(parseServiceDefinition(value, this.#projectRoot));
+      return cleanDefinition(parseServiceDefinition(value, this.#projectRoot, {
+        allowMissingCwd: tolerateUnavailablePaths,
+      }));
     } catch (error) {
       if (error instanceof DevHubError) {
         throw new DevHubError("INVALID_BUILTIN_SERVICE_CONFIG", error.message, 400, error.details);
@@ -458,9 +464,14 @@ export class PdhBuiltinServiceConfigStore {
     }
   }
 
-  #validateSource(source: ServiceConfigurationFileV2): LoadedServiceConfiguration {
+  #validateSource(
+    source: ServiceConfigurationFileV2,
+    tolerateUnavailablePaths = false,
+  ): LoadedServiceConfiguration {
     try {
-      const definitions = resolveServiceConfiguration(source, this.#projectRoot);
+      const definitions = resolveServiceConfiguration(source, this.#projectRoot, {
+        tolerateUnavailablePaths,
+      });
       return { source: cloneJson(source), definitions };
     } catch (error) {
       if (error instanceof DevHubError) {
@@ -483,10 +494,10 @@ export class PdhBuiltinServiceConfigStore {
         return configError("version=1 本机覆盖缺少 overrides 或 removed");
       }
       for (const raw of file.overrides) {
-        const definition = this.#parseDefinition(raw);
+        const definition = this.#parseDefinition(raw, true);
         const current = this.allDefinitions().find((item) => item.id === definition.id);
         if (!current) return configError(`覆盖了未知内置服务：${definition.id}`);
-        this.#setServiceOverride(current, definition);
+        this.#setServiceOverride(current, definition, true);
       }
       this.#removed = new Set(file.removed);
       return;
@@ -505,7 +516,10 @@ export class PdhBuiltinServiceConfigStore {
       const anchored = baseline
         ? anchorReleaseValidationPolicies(baseline, raw)
         : raw as unknown as ServiceSeriesSource;
-      const candidate = this.#validateSource({ version: 2, series: [anchored] }).source.series[0]!;
+      const candidate = this.#validateSource(
+        { version: 2, series: [anchored] },
+        true,
+      ).source.series[0]!;
       const previousIds = file.version === 3
         ? file.baselineProfileIds[candidate.id]
         : undefined;

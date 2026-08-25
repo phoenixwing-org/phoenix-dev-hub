@@ -1,8 +1,15 @@
 # Phoenix Dev Hub
 
-当前版本：**0.3.2**
+当前版本：**0.4.0**
 
 Phoenix Dev Hub 是 Phoenix 工作区内开发服务的本机控制台。它用一个 Node 进程、一个端口同时提供 Web 工作台和控制 API，不再要求记住每个仓库的启动命令与端口。
+
+## 项目仓库
+
+- Gitee（`gitee`）：[phoenixwing/phoenix-dev-hub](https://gitee.com/phoenixwing/phoenix-dev-hub)
+- GitHub（`github`）：[phoenixwing-org/phoenix-dev-hub](https://github.com/phoenixwing-org/phoenix-dev-hub)
+
+提交前可用 `git remote -v` 核对两个正式远端；默认远端仍是 Gitee 的 `origin`，不会自动向 GitHub 推送。
 
 ```text
 http://127.0.0.1:42100

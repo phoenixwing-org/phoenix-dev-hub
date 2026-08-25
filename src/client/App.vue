@@ -784,7 +784,7 @@ onBeforeUnmount(() => {
         />
       </template>
       <template #footer>
-        <span>Wing 0.6.4</span>
+        <span>Wing 0.7.1</span>
         <span v-if="lastRefreshAt">最近刷新 {{ lastRefreshAt.toLocaleTimeString('zh-CN', { hour12: false }) }}</span>
       </template>
     </PnwWorkbenchShell>

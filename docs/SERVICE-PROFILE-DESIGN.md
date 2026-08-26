@@ -1,6 +1,6 @@
 # 多版本服务分组与配置模型
 
-状态：Phoenix Dev Hub 0.3.0 已实现
+状态：Phoenix Dev Hub 0.4.0 已实现
 
 ## 适用边界
 

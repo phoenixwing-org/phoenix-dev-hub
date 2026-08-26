@@ -113,6 +113,11 @@ cp config/services.sample.json config/services.user.json
 
 Hub 不会自动执行 sample；复制后必须复核 `.worktrees`、commit、SHA、integrity、数据库与端口。`services.user.json` 不进入 Git，由使用者与 `.runtime` 一起自行备份。为兼容早期安装，未迁移的 `config/services.json` 仍可读取，但也已受 Git 忽略。加载优先级为 `services.user.json`、旧 `services.json`；两者都不存在时启动会明确提示初始化。每个实际清单项必须包含：
 
+Windows 与 Linux 的完整目录示例、Admin Host worktree 创建、Open Issue / Acme 品牌插件开发挂载流程见
+[`docs/LOCAL-CONFIGURATION-GUIDE.md`](docs/LOCAL-CONFIGURATION-GUIDE.md)。对应文件为
+`config/services.windows.sample.json`、`config/services.linux.sample.json`、
+`config/admin-plugins.windows.sample.json` 与 `config/admin-plugins.linux.sample.json`；只复制与当前系统匹配的一套。
+
 已经保存的配置若只是工作目录或发布包路径暂时不存在，Hub 仍会启动并保留对应条目；后端只汇总输出一次警告，网页显示具体配置错误，并在 spawn 前拒绝启动该条目。JSON 结构、服务 ID、端口及安全策略等配置仍按严格规则校验。
 
 Midway 4 sample 中的 `MIDWAY4_DB_USERNAME=replace-me` 必须在用户配置中替换；密码只从 Hub 进程继承的 `MIDWAY4_DB_PASSWORD` 或 `PGPASSWORD` 读取，不写入 sample。该 Profile 仅允许 loopback 和数据库 `cool_admin_midway4_validation`，其中 `synchronize/initDB/initMenu` 只用于纯 Cool 阶段 A 的隔离开发联调，不得指向共享、发布验收或生产数据库。
@@ -163,7 +168,7 @@ mkdir -p .runtime
 cp config/admin-plugins.sample.json .runtime/admin-plugins.json
 ```
 
-模板路径相对 Hub 根目录解析，示例包含 Admin Vue/Node Host 与 Open Issue、Function 两个插件登记。
+模板路径相对 Hub 根目录解析，示例包含 Admin Vue/Node Host 与 Open Issue、Acme 品牌插件两个登记。
 复制后应删除本机不存在的条目并核对 `moduleId`。JSON 只负责登记；实际 Vue/Node symlink 与
 `.git/info/exclude` marker 必须在“系统 → Admin 工具 → Admin 插件”中检查后点击“开发挂载”创建。
 `operations` 在 sample 中保留为空对象，用于说明运行时结构；它是 Hub 自动记录的本机操作历史，

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,38 @@ function loadTestConfiguration() {
 }
 
 describe("services.json", () => {
+  it("Windows 与 Linux 示例保留当前服务拓扑和开发插件登记", () => {
+    for (const platform of ["windows", "linux"]) {
+      const serviceSample = JSON.parse(readFileSync(
+        path.join(projectRoot, "config", `services.${platform}.sample.json`),
+        "utf8",
+      ));
+      expect(serviceSample.version).toBe(2);
+      expect(serviceSample.series.map((series: { id: string }) => series.id)).toEqual([
+        "phoenix-admin",
+        "cool-admin-midway4",
+        "open-issue",
+      ]);
+      expect(serviceSample.series[0].profiles.map((profile: { id: string }) => profile.id)).toEqual([
+        "development",
+        "clean-validation",
+      ]);
+      expect(serviceSample.series[0].profiles[1].services.web.id).toBe("admin-clean-validation-web");
+      expect(serviceSample.series[0].profiles[1].services.api.id).toBe("admin-clean-validation-api");
+
+      const pluginSample = JSON.parse(readFileSync(
+        path.join(projectRoot, "config", `admin-plugins.${platform}.sample.json`),
+        "utf8",
+      ));
+      expect(pluginSample.version).toBe(1);
+      expect(pluginSample.plugins.map((plugin: { moduleId: string }) => plugin.moduleId)).toEqual([
+        "phoenix-open-issue",
+        "phoenix-branding",
+      ]);
+      expect(pluginSample.operations).toEqual({});
+    }
+  });
+
   it("配置文件整体损坏时返回可展示错误而不抛出 DevHubError", () => {
     const root = mkdtempSync(path.join(os.tmpdir(), "pdh-config-invalid-json-"));
     const configPath = path.join(root, "services.user.json");

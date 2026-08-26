@@ -1,0 +1,242 @@
+{
+  "sampleNotice": "Windows 示例。复制为 config/services.user.json 后使用；假定所有仓库位于 E:\\phoenix。先按 docs/LOCAL-CONFIGURATION-GUIDE.md 建立两个 Admin Host worktree，再逐项替换路径、Git ref、端口和环境变量。示例不包含密码、DSN、token 或真实数据库名。",
+  "version": 2,
+  "series": [
+    {
+      "id": "phoenix-admin",
+      "name": "Phoenix Admin",
+      "template": {
+        "runtimeSlot": "phoenix-admin",
+        "services": {
+          "web": {
+            "name": "Phoenix Admin Web",
+            "description": "Cool Admin Vue 前端；开发联调使用 Host 自己的 dev:local",
+            "command": {
+              "executable": "pnpm",
+              "args": ["dev:local"]
+            },
+            "endpoints": [
+              {
+                "id": "web",
+                "label": "Web",
+                "port": 9000,
+                "openUrl": "http://127.0.0.1:9000/",
+                "healthUrl": "http://127.0.0.1:9000/"
+              }
+            ],
+            "externalStop": "confirm-matching-cwd",
+            "startOrder": 20
+          },
+          "api": {
+            "name": "Phoenix Admin API",
+            "description": "只执行 Admin Node 的 pnpm dev；数据库初始化与插件挂载由开发者显式处理",
+            "command": {
+              "executable": "pnpm",
+              "args": ["dev"]
+            },
+            "endpoints": [
+              {
+                "id": "api",
+                "label": "API",
+                "port": 8101,
+                "openUrl": "http://127.0.0.1:8101/",
+                "healthUrl": "http://127.0.0.1:8101/index.html"
+              }
+            ],
+            "externalStop": "confirm-matching-cwd",
+            "startOrder": 10
+          }
+        }
+      },
+      "profiles": [
+        {
+          "id": "development",
+          "name": "Admin 开发联调",
+          "runtimeSlot": "phoenix-admin-development",
+          "metadata": {
+            "description": "工作区主目录；Admin 插件 View 的开发挂载只作用于这一组"
+          },
+          "services": {
+            "web": {
+              "id": "admin-web",
+              "cwd": "E:\\phoenix\\phoenix-admin-vue"
+            },
+            "api": {
+              "id": "admin-api",
+              "cwd": "E:\\phoenix\\phoenix-admin-node"
+            }
+          }
+        },
+        {
+          "id": "clean-validation",
+          "name": "Admin 干净验证",
+          "runtimeSlot": "phoenix-admin-clean-validation",
+          "metadata": {
+            "description": "独立 Vue/Node Git worktree；保持无开发 symlink，用于核对另一 Git ref"
+          },
+          "services": {
+            "web": {
+              "id": "admin-clean-validation-web",
+              "name": "Phoenix Admin 干净验证 Web",
+              "cwd": "E:\\phoenix\\.worktrees\\phoenix-admin-clean-validation\\vue",
+              "command": {
+                "args": ["dev", "--host", "127.0.0.1", "--strictPort", "--port", "9100"]
+              },
+              "endpoints": [
+                {
+                  "id": "web",
+                  "label": "Web",
+                  "port": 9100,
+                  "openUrl": "http://127.0.0.1:9100/",
+                  "healthUrl": "http://127.0.0.1:9100/"
+                }
+              ]
+            },
+            "api": {
+              "id": "admin-clean-validation-api",
+              "name": "Phoenix Admin 干净验证 API",
+              "cwd": "E:\\phoenix\\.worktrees\\phoenix-admin-clean-validation\\node",
+              "command": {
+                "args": ["dev"],
+                "env": {
+                  "PAH_SERVER_PORT": "8201",
+                  "PAH_DB_SYNCHRONIZE": "false",
+                  "PAH_DB_INITIALIZE": "false"
+                }
+              },
+              "endpoints": [
+                {
+                  "id": "api",
+                  "label": "API",
+                  "port": 8201,
+                  "openUrl": "http://127.0.0.1:8201/",
+                  "healthUrl": "http://127.0.0.1:8201/index.html"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "cool-admin-midway4",
+      "name": "Cool Admin Midway 4",
+      "template": {
+        "runtimeSlot": "cool-admin-midway4",
+        "services": {
+          "web": {
+            "name": "Cool Admin 8.x Vue",
+            "description": "纯 Cool Vue 8.x 联调客户端；不包含 Phoenix、Wing、Pah 或业务插件",
+            "command": {
+              "executable": "pnpm",
+              "args": ["dev", "--host", "127.0.0.1", "--strictPort", "--port", "9200"]
+            },
+            "endpoints": [
+              {
+                "id": "web",
+                "label": "Web",
+                "port": 9200,
+                "openUrl": "http://127.0.0.1:9200/",
+                "healthUrl": "http://127.0.0.1:9200/"
+              }
+            ],
+            "externalStop": "confirm-matching-cwd",
+            "startOrder": 20
+          },
+          "api": {
+            "name": "Cool Admin 8.x / Midway 4 API",
+            "description": "纯 Cool Node 8.x / Midway 4；只连接使用者显式准备的隔离开发库",
+            "command": {
+              "executable": "pnpm",
+              "args": ["dev:midway4"]
+            },
+            "endpoints": [
+              {
+                "id": "api",
+                "label": "API",
+                "port": 8001,
+                "openUrl": "http://127.0.0.1:8001/",
+                "healthUrl": "http://127.0.0.1:8001/index.html"
+              }
+            ],
+            "externalStop": "confirm-matching-cwd",
+            "startOrder": 10
+          }
+        }
+      },
+      "profiles": [
+        {
+          "id": "integration",
+          "name": "8.x / Midway 4 联调",
+          "runtimeSlot": "cool-admin-midway4-integration",
+          "metadata": {
+            "description": "纯 Cool 8.x 前后端闭环，不测试 Phoenix 扩展"
+          },
+          "services": {
+            "web": {
+              "id": "cool-admin-midway4-web",
+              "cwd": "E:\\phoenix\\.worktrees\\phoenix-admin-midway4\\vue"
+            },
+            "api": {
+              "id": "cool-admin-midway4-api",
+              "cwd": "E:\\phoenix\\.worktrees\\phoenix-admin-midway4\\node",
+              "command": {
+                "env": {
+                  "MIDWAY4_DB_HOST": "127.0.0.1",
+                  "MIDWAY4_DB_PORT": "5432",
+                  "MIDWAY4_DB_USERNAME": "replace-me",
+                  "MIDWAY4_DB_DATABASE": "replace-with-your-isolated-cool-db"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "open-issue",
+      "name": "Phoenix Open Issue",
+      "template": {
+        "runtimeSlot": "open-issue",
+        "services": {
+          "app": {
+            "name": "Phoenix Open Issue",
+            "description": "旧独立网站示例；Core、API 与 Web 联合启动",
+            "command": {
+              "executable": "pnpm",
+              "args": ["dev"]
+            },
+            "endpoints": [
+              {
+                "id": "api",
+                "label": "API",
+                "port": 3400,
+                "healthUrl": "http://127.0.0.1:3400/"
+              },
+              {
+                "id": "web",
+                "label": "Web",
+                "port": 5183,
+                "openUrl": "http://127.0.0.1:5183/",
+                "healthUrl": "http://127.0.0.1:5183/"
+              }
+            ],
+            "externalStop": "confirm-matching-cwd"
+          }
+        }
+      },
+      "profiles": [
+        {
+          "id": "default",
+          "name": "默认实例",
+          "services": {
+            "app": {
+              "id": "open-issue",
+              "cwd": "E:\\phoenix\\phoenix-open-issue"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,209 @@
+# 从示例配置到本机工作区
+
+本指南把当前 Phoenix Dev Hub 的 macOS 工作区拓扑翻译成 Windows 和 Linux 的公开示例。
+它服务于两类读者：首次配置的开发者，以及需要在不读取私有 `services.user.json` 的前提下协助配置的 AI。
+
+示例不包含密码、连接串、token、真实数据库名、私有 Git ref 或本机运行状态。所有实际值均只写入
+Git 忽略的 `config/services.user.json` 与 `.runtime/admin-plugins.json`。
+
+## 示例拓扑
+
+两套平台配置均保留当前 Hub 的三组服务：
+
+| Series | Profile / 服务 | 用途 | 端口 |
+| --- | --- | --- | --- |
+| Phoenix Admin | Admin 开发联调 | 主 Vue/Node 工作目录；可挂载本机插件 | 9000 / 8101 |
+| Phoenix Admin | Admin 干净验证 | 独立 Vue/Node worktree；不挂载开发源码 | 9100 / 8201 |
+| Cool Admin Midway 4 | 8.x / Midway 4 联调 | 与 Phoenix 扩展隔离的 Cool 基线联调 | 9200 / 8001 |
+| Phoenix Open Issue | 默认实例 | 保留的独立网站；不是 Admin 插件进程 | 5183 / 3400 |
+
+Admin 插件开发登记仅包含 **Open Issue** 与 **Acme 品牌插件**。它们不是网站或服务，必须先登记、检查，
+再由“系统 → Admin 工具 → Admin 插件”显式创建开发 symlink。
+
+开发联调 Host 和干净验证 Host 的职责必须分开：
+
+```text
+Admin 开发联调
+  phoenix-admin-vue + phoenix-admin-node
+  └─ 可以挂载 Open Issue / Acme 品牌插件的源码 symlink
+
+Admin 干净验证
+  .worktrees/phoenix-admin-clean-validation/vue
+  .worktrees/phoenix-admin-clean-validation/node
+  └─ 不挂载插件源码；用于核对另一组明确 Git ref
+```
+
+不要把开发插件挂到干净验证 worktree，也不要用 `link:`、`file:`、`workspace:` 或手工复制源码伪造干净验证。
+
+## 1. 选择与复制示例
+
+仅复制与本机系统匹配的一套，Hub 不会自动读取任何 `*.sample.json`。
+
+### Windows（假定根目录为 `E:\phoenix`）
+
+```powershell
+Copy-Item config\services.windows.sample.json config\services.user.json
+New-Item -ItemType Directory -Force .runtime | Out-Null
+Copy-Item config\admin-plugins.windows.sample.json .runtime\admin-plugins.json
+```
+
+目录约定如下：
+
+```text
+E:\phoenix
+├─ phoenix-dev-hub
+├─ phoenix-admin-vue
+├─ phoenix-admin-node
+├─ phoenix-open-issue
+├─ phoenix-branding
+└─ .worktrees
+   ├─ phoenix-admin-clean-validation
+   │  ├─ vue
+   │  └─ node
+   └─ phoenix-admin-midway4
+      ├─ vue
+      └─ node
+```
+
+### Linux（假定根目录为 `/opt/phoenix`）
+
+`/opt/phoenix` 必须归运行 Hub 的开发用户所有；也可以整体替换为该用户拥有的其他绝对目录。
+
+```bash
+cp config/services.linux.sample.json config/services.user.json
+mkdir -p .runtime
+cp config/admin-plugins.linux.sample.json .runtime/admin-plugins.json
+```
+
+目录约定如下：
+
+```text
+/opt/phoenix
+├── phoenix-dev-hub
+├── phoenix-admin-vue
+├── phoenix-admin-node
+├── phoenix-open-issue
+├── phoenix-branding
+└── .worktrees
+    ├── phoenix-admin-clean-validation/{vue,node}
+    └── phoenix-admin-midway4/{vue,node}
+```
+
+macOS 的同级工作区可从 `config/services.sample.json` 与 `config/admin-plugins.sample.json` 开始；结构与本指南相同，
+但必须把实际 worktree、端口、数据库和制品证据换成自己机器的值。
+
+## 2. 创建干净 Admin Host worktree
+
+先确认主仓已经取得目标 ref 且目标目录不存在。下列命令使用 `--detach` 固定快照，避免误把同一开发分支同时用于
+主目录和干净验证。将 `YOUR_VUE_COMMIT`、`YOUR_NODE_COMMIT` 替换为要核对的精确 commit；不要把字面值提交进用户配置。
+
+### Windows PowerShell
+
+```powershell
+$Root = 'E:\phoenix'
+git -C "$Root\phoenix-admin-vue" worktree add --detach "$Root\.worktrees\phoenix-admin-clean-validation\vue" YOUR_VUE_COMMIT
+git -C "$Root\phoenix-admin-node" worktree add --detach "$Root\.worktrees\phoenix-admin-clean-validation\node" YOUR_NODE_COMMIT
+```
+
+### Linux shell
+
+```bash
+root=/opt/phoenix
+git -C "$root/phoenix-admin-vue" worktree add --detach "$root/.worktrees/phoenix-admin-clean-validation/vue" YOUR_VUE_COMMIT
+git -C "$root/phoenix-admin-node" worktree add --detach "$root/.worktrees/phoenix-admin-clean-validation/node" YOUR_NODE_COMMIT
+```
+
+每个 worktree 是各自 Git 仓的独立检出，因此 Vue 与 Node 分别创建。若还要核对纯 Cool 8.x / Midway 4，
+按同一模式创建 `phoenix-admin-midway4/vue` 与 `phoenix-admin-midway4/node`，并在配置中改为各自的实际路径。
+
+`git worktree add` 不会覆盖已有目录；若目录已存在，先检查其 `git status --short`、`git rev-parse HEAD` 和用途。
+不要通过删除目录、强制 checkout 或覆盖链接来“重建”未知 worktree。
+
+## 3. 修改两份私有配置
+
+复制完成后，逐项编辑以下文件：
+
+| 文件 | 作用 | 可以安全填写的内容 | 禁止写入 Git 的内容 |
+| --- | --- | --- | --- |
+| `config/services.user.json` | Series、Profile、服务 cwd、固定端口和受控命令 | 已存在目录、固定端口、无 shell 的 `pnpm` 参数、环境变量名 | 密码、DSN、token、真实备份路径、个人证据 |
+| `.runtime/admin-plugins.json` | Admin 开发 Host 与插件候选目录登记 | Host 根目录、插件 `productRoot`、相对 manifest 路径 | 操作成功状态、凭据、手工 symlink 记录 |
+
+平台示例中最需要替换的是根目录：Windows 的 `E:\\phoenix`，Linux 的 `/opt/phoenix`。
+不要把 Windows 反斜杠样例直接放在 Linux/macOS，也不要把 Linux 绝对路径放在 Windows。
+
+干净验证 Profile 的端口固定为 Web `9100`、API `8201`；开发联调固定为 `9000`、`8101`。如端口已被占用，
+必须同时修改该服务的 `command.args` 和对应 endpoint 的 `port/openUrl/healthUrl`，并保留 `--strictPort`。
+Hub 不应自动漂移到其他端口。
+
+示例将 `PAH_DB_SYNCHRONIZE=false` 与 `PAH_DB_INITIALIZE=false` 固定在干净验证 API；Hub 不创建数据库、
+不执行 DDL、seed 或安装。数据库与插件生命周期应由开发者按 Admin Host 的受控流程单独准备。
+
+## 4. 登记并开发挂载 Open Issue / Acme 品牌插件
+
+`admin-plugins.*.sample.json` 只登记两个候选产品：
+
+| 插件 | `moduleId` | 默认源码目录 |
+| --- | --- | --- |
+| Open Issue | `phoenix-open-issue` | `<root>/phoenix-open-issue` |
+| Acme 品牌插件 | `phoenix-branding` | `<root>/phoenix-branding` |
+
+启动 Hub 后，执行下列操作：
+
+1. 打开“系统 → Admin 工具 → Admin 插件”。
+2. 确认每项都显示正确的 Git 根、`moduleId`、Manifest v2 与 Vue/Node 源目录。
+3. 对需要联调的插件点击“开发挂载”。Hub 会实时检查并在 **Admin 开发联调** Host 中创建两个相对 symlink 和 Git exclude marker。
+4. 点击“启动 Admin Host”，由 Hub 按 API → Web 顺序启动或监控 `8101/9000`。
+5. 用“装配核验”确认 source commit、manifest、两条链接、Host lifecycle、路由和端口；它是开发装配核验，不表示产品迁移或发布完成。
+
+若 Open Issue 或品牌插件也需要固定另一版本，先在**插件自己的仓库**创建独立 worktree，例如：
+
+```bash
+git -C /opt/phoenix/phoenix-open-issue worktree add --detach \
+  /opt/phoenix/.worktrees/phoenix-open-issue-review YOUR_ISSUE_COMMIT
+```
+
+然后在插件详情中使用“修改目录”选择该 worktree。Hub 只接受相同 `moduleId`，会重新核验 Manifest、Vue/Node
+目标、既有链接与 `.git/info/exclude` marker；不要直接编辑已挂载条目的 JSON，也不要自行创建 symlink。
+
+Windows 上使用等价命令，并将路径改为：
+
+```powershell
+git -C 'E:\phoenix\phoenix-open-issue' worktree add --detach `
+  'E:\phoenix\.worktrees\phoenix-open-issue-review' YOUR_ISSUE_COMMIT
+```
+
+开发卸载只移除经身份复核后仍指向当前插件的两条开发链接与 marker；它不会卸载 Pah 业务模块、删除产品目录或清空数据库。
+
+## 5. 启动顺序与验收边界
+
+建议按以下顺序点检：
+
+1. `pnpm dev` 启动 Dev Hub；浏览器打开 `http://127.0.0.1:42100/`。
+2. 服务总览应显示三个 Series：Cool Admin Midway 4、Phoenix Admin、Phoenix Open Issue。
+3. 在 Admin 插件 View 完成 Open Issue / Acme 品牌插件的 inspect 与开发挂载。
+4. 从插件 View 启动 Admin 开发联调 Host，确认 API `8101` 后再确认 Web `9000`。
+5. 从服务总览单独启动 Phoenix Open Issue 独立网站，确认 API `3400`、Web `5183`。
+6. 需要验证另一 Host ref 时，从服务总览单独启动 Admin 干净验证，确认 API `8201`、Web `9100`；它不得出现开发插件 symlink。
+7. 只有在已明确准备隔离库和依赖后，才启动 Cool Admin Midway 4，确认 API `8001`、Web `9200`。
+
+若配置目录或 worktree 缺失，Hub 本身仍应启动，并在网页中将相应条目标记为“配置错误”；修复路径后刷新或重启 Hub 即可。
+这类错误不能被误报为 Admin Host 健康或插件已挂载。
+
+## 6. 提交给 AI 的最小点检信息
+
+需要 AI 协助时，不要发送密码、连接串或整个私有配置。提供以下脱敏信息即可：
+
+```text
+系统：Windows / Linux
+工作区根：E:\phoenix / /opt/phoenix
+目标：开发联调 / 干净验证 / 独立 Open Issue
+服务 ID：
+Vue worktree commit：
+Node worktree commit：
+插件 moduleId 与 source commit：
+Hub 页面显示的配置错误或生命周期/健康状态：
+是否已经在 Admin 插件 View 执行 inspect / 开发挂载：
+```
+
+AI 应先检查路径、Git root、worktree commit、`moduleId`、Manifest v2、端口和挂载状态；不应猜测路径、
+修改产品源码、手工创建链接、自动建库或把“路由 HTTP 200”当成插件功能迁移完成。

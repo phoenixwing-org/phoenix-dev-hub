@@ -138,6 +138,10 @@ Hub 不应自动漂移到其他端口。
 示例将 `PAH_DB_SYNCHRONIZE=false` 与 `PAH_DB_INITIALIZE=false` 固定在干净验证 API；Hub 不创建数据库、
 不执行 DDL、seed 或安装。数据库与插件生命周期应由开发者按 Admin Host 的受控流程单独准备。
 
+Admin 开发 Host 的 Vue/Node 根目录及 Web/API 服务 ID 可在“系统 → Dev Hub → Hub 设置 →
+Phoenix Admin 开发支持”中查看和编辑；这是唯一的界面编辑入口。服务端会验证 Git 根目录和服务 ID。
+如果已有插件处于已挂载、部分挂载或冲突状态，必须先执行开发卸载，才能切换到另一套 Host。
+
 ## 4. 登记并开发挂载 Open Issue / Acme 品牌插件
 
 `admin-plugins.*.sample.json` 只登记两个候选产品：

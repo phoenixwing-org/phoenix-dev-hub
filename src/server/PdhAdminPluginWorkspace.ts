@@ -376,6 +376,27 @@ export class PdhAdminPluginWorkspace {
     if (postgresEnvFile && !path.isAbsolute(postgresEnvFile)) {
       return fail("INVALID_ADMIN_PLUGIN_SETTINGS", "PostgreSQL env 文件必须是绝对路径");
     }
+    const hostChanged = adminWebRoot !== this.#settings.adminWebRoot
+      || adminNodeRoot !== this.#settings.adminNodeRoot
+      || adminWebServiceId !== this.#settings.adminWebServiceId
+      || adminApiServiceId !== this.#settings.adminApiServiceId;
+    if (hostChanged) {
+      const mounted = this.#plugins
+        .map((plugin) => this.status(plugin.id))
+        .filter((plugin) => plugin.mountState !== "unmounted" && plugin.mountState !== "unavailable");
+      if (mounted.length) {
+        return fail(
+          "ADMIN_PLUGIN_HOST_RECONFIGURE_REQUIRES_UNMOUNT",
+          "修改 Phoenix Admin 开发 Host 前，必须先对已挂载或冲突的插件执行开发卸载",
+          409,
+          mounted.map((plugin) => ({
+            id: plugin.registration.id,
+            moduleId: plugin.identity.moduleId,
+            mountState: plugin.mountState,
+          })),
+        );
+      }
+    }
     this.#settings = {
       adminWebRoot,
       adminNodeRoot,

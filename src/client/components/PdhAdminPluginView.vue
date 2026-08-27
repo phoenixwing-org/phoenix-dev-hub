@@ -6,7 +6,6 @@ import type {
   AdminPluginCatalogResponse,
   AdminPluginStatus,
   AdminPluginVerifyResponse,
-  AdminPluginWorkspaceSettings,
 } from "@shared/contracts";
 import { devHubApi } from "../api";
 
@@ -20,20 +19,16 @@ const emit = defineEmits<{
   select: [pluginId: string];
   error: [error: unknown];
   hostStarted: [];
+  configureHost: [];
 }>();
 
 const busy = ref("");
 const verifyResult = ref<AdminPluginVerifyResponse>();
-const editingSettings = ref(false);
-const settingsDraft = ref<AdminPluginWorkspaceSettings>();
 const repointing = ref(false);
 const repointDirectory = ref("");
 const repointCandidate = ref<AdminPluginCandidate>();
 const selected = computed(() => props.catalog?.plugins.find((plugin) => plugin.registration.id === props.selectedId));
 
-watch(() => props.catalog?.settings, (settings) => {
-  if (settings && !editingSettings.value) settingsDraft.value = { ...settings };
-}, { immediate: true, deep: true });
 watch(() => props.selectedId, () => {
   repointing.value = false;
   repointDirectory.value = "";
@@ -125,19 +120,6 @@ async function verify(): Promise<void> {
   }
 }
 
-async function saveSettings(): Promise<void> {
-  if (!settingsDraft.value || busy.value) return;
-  busy.value = "settings";
-  try {
-    await devHubApi.updateAdminPluginSettings(settingsDraft.value);
-    editingSettings.value = false;
-    emit("changed", props.selectedId || undefined);
-  } catch (error) {
-    emit("error", error);
-  } finally {
-    busy.value = "";
-  }
-}
 </script>
 
 <template>
@@ -148,6 +130,7 @@ async function saveSettings(): Promise<void> {
   >
     <template #actions>
       <div class="header-actions">
+        <button type="button" :disabled="!!busy" @click="emit('configureHost')">开发 Host 设置</button>
         <button type="button" :disabled="!!busy" @click="startHost">启动 Admin Host</button>
         <button type="button" class="primary" :disabled="!!busy" @click="verify">{{ busy === 'verify' ? '核验中…' : '装配核验' }}</button>
       </div>
@@ -277,13 +260,13 @@ async function saveSettings(): Promise<void> {
     </section>
 
     <section class="panel settings-panel">
-      <div class="section-title"><div><h3>Admin Host 工作区</h3><p>这是本机私有配置；不会随项目归档。</p></div><button type="button" @click="editingSettings = !editingSettings">{{ editingSettings ? '取消' : '编辑' }}</button></div>
-      <div v-if="settingsDraft" class="settings-grid">
-        <label><span>Admin Vue 根目录</span><input v-model="settingsDraft.adminWebRoot" :readonly="!editingSettings"></label>
-        <label><span>Admin Node 根目录</span><input v-model="settingsDraft.adminNodeRoot" :readonly="!editingSettings"></label>
-        <label><span>Web / API 服务 ID</span><div class="inline"><input v-model="settingsDraft.adminWebServiceId" :readonly="!editingSettings"><input v-model="settingsDraft.adminApiServiceId" :readonly="!editingSettings"></div></label>
-      </div>
-      <div v-if="editingSettings" class="settings-actions"><button type="button" class="primary" :disabled="!!busy" @click="saveSettings">保存本机设置</button></div>
+      <div class="section-title"><div><h3>开发 Admin Host</h3><p>开发挂载的唯一目标；在 Hub 设置中统一修改，避免与服务配置重复。</p></div><button type="button" @click="emit('configureHost')">打开 Hub 设置</button></div>
+      <dl v-if="catalog" class="host-settings-facts">
+        <div><dt>Admin Vue</dt><dd>{{ catalog.settings.adminWebRoot }}</dd></div>
+        <div><dt>Admin Node</dt><dd>{{ catalog.settings.adminNodeRoot }}</dd></div>
+        <div><dt>Web 服务</dt><dd>{{ catalog.settings.adminWebServiceId }}</dd></div>
+        <div><dt>API 服务</dt><dd>{{ catalog.settings.adminApiServiceId }}</dd></div>
+      </dl>
       <p class="recovery">退出 / 恢复：先停止 Admin Host → 对每个插件执行“开发卸载” → 再启动稳定 Host。数据库初始化与迁移由开发者在 Hub 之外处理。</p>
     </section>
   </PnwPageLayout>
@@ -303,6 +286,6 @@ dl { margin: 0; }dl div { display: grid; grid-template-columns: 70px minmax(0,1f
 label { display: grid; gap: 5px; }label > span { color: var(--pnw-workbench-muted, #94a3b8); font-size: 9px; }input { min-width: 0; box-sizing: border-box; border: 1px solid var(--pnw-workbench-border, #334155); border-radius: 6px; padding: 7px 8px; background: var(--pnw-input-bg, rgba(15,23,42,.4)); color: inherit; outline: none; }input:read-only { border-color: transparent; padding-inline: 0; }.policy,.recovery { color: var(--pnw-workbench-muted, #94a3b8); font-size: 9px; line-height: 1.55; }.token-field + .policy + button { margin: 0 14px 12px; }pre { max-height: 240px; margin: 0 14px 14px; overflow: auto; padding: 10px; border-radius: 6px; background: rgba(2,6,23,.42); color: #cbd5e1; font-size: 9px; }
 .verify-panel article { display: grid; grid-template-columns: minmax(140px,1fr) auto auto auto; gap: 8px; align-items: center; padding: 9px 14px; border-top: 1px solid rgba(148,163,184,.09); font-size: 9px; }.verify-panel article ul { grid-column: 1/-1; padding: 3px 0; }.verify-panel article li { display: flex; justify-content: space-between; color: #f59e0b; }.verify-panel article li.ok { color: #22c55e; }
 .verification-boundary { margin: 12px 14px; padding: 11px; border: 1px solid rgba(245,158,11,.38); border-radius: 7px; background: rgba(245,158,11,.06); font-size: 9px; }.verification-boundary > strong { color: #f59e0b; }.verification-boundary > p { color: var(--pnw-workbench-muted, #94a3b8); }.gate-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }.gate-groups h4 { margin: 0 0 5px; font-size: 10px; }.gate-groups article { display: grid; grid-template-columns: auto minmax(0,1fr); padding: 6px 0; border-top: 1px solid rgba(148,163,184,.09); }.gate-groups article code { overflow: hidden; color: var(--pnw-workbench-muted, #94a3b8); text-overflow: ellipsis; white-space: nowrap; }.gate-groups article small { grid-column: 1/-1; color: #f59e0b; }.verification-boundary > ul { margin: 9px 0 0; padding-left: 18px; color: #f59e0b; }
-.settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px 14px; }.inline { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }.settings-actions { justify-content: flex-end; margin: 0 14px 12px; }.empty-state { display: grid; justify-items: center; align-content: center; min-height: 48vh; color: var(--pnw-workbench-muted, #94a3b8); text-align: center; }.empty-mark { font-size: 40px; color: #3b82f6; }.empty-state h2 { margin: 10px 0 4px; color: var(--pnw-workbench-text, #e2e8f0); font-size: 17px; }.empty-state p { max-width: 560px; font-size: 11px; line-height: 1.6; }
-@media (max-width: 900px) { .plugin-heading { align-items: stretch; flex-direction: column; }.mount-grid,.two-column,.settings-grid,.gate-groups { grid-template-columns: 1fr; }.verify-panel > article { grid-template-columns: 1fr auto; }.verify-panel > article span:nth-of-type(2),.verify-panel > article > code { display: none; } }
+.host-settings-facts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 14px; margin: 12px 14px; }.host-settings-facts div { grid-template-columns: 70px minmax(0,1fr); }.empty-state { display: grid; justify-items: center; align-content: center; min-height: 48vh; color: var(--pnw-workbench-muted, #94a3b8); text-align: center; }.empty-mark { font-size: 40px; color: #3b82f6; }.empty-state h2 { margin: 10px 0 4px; color: var(--pnw-workbench-text, #e2e8f0); font-size: 17px; }.empty-state p { max-width: 560px; font-size: 11px; line-height: 1.6; }
+@media (max-width: 900px) { .plugin-heading { align-items: stretch; flex-direction: column; }.mount-grid,.two-column,.host-settings-facts,.gate-groups { grid-template-columns: 1fr; }.verify-panel > article { grid-template-columns: 1fr auto; }.verify-panel > article span:nth-of-type(2),.verify-panel > article > code { display: none; } }
 </style>

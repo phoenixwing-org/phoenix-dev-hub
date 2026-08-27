@@ -374,6 +374,40 @@ describe("Admin 插件开发工作区", () => {
     expect(content).not.toContain("postgres://");
   });
 
+  it("修改 Phoenix Admin 开发 Host 前要求开发插件已卸载", () => {
+    const current = fixture();
+    const alternateWeb = path.join(current.root, "alternate-web-host");
+    const alternateNode = path.join(current.root, "alternate-node-host");
+    gitRoot(alternateWeb);
+    gitRoot(alternateNode);
+
+    const plugin = current.workspace.add(pluginFixture(current.root));
+    current.workspace.mount(plugin.registration.id);
+    expect(() => current.workspace.updateSettings({
+      adminWebRoot: alternateWeb,
+      adminNodeRoot: alternateNode,
+      adminWebServiceId: "admin-web-alt",
+      adminApiServiceId: "admin-api-alt",
+    })).toThrow("必须先对已挂载或冲突的插件执行开发卸载");
+    expect(current.workspace.settings()).toMatchObject({
+      adminWebRoot: current.web,
+      adminNodeRoot: current.node,
+    });
+
+    current.workspace.unmount(plugin.registration.id);
+    expect(current.workspace.updateSettings({
+      adminWebRoot: alternateWeb,
+      adminNodeRoot: alternateNode,
+      adminWebServiceId: "admin-web-alt",
+      adminApiServiceId: "admin-api-alt",
+    })).toMatchObject({
+      adminWebRoot: realpathSync(alternateWeb),
+      adminNodeRoot: realpathSync(alternateNode),
+      adminWebServiceId: "admin-web-alt",
+      adminApiServiceId: "admin-api-alt",
+    });
+  });
+
   it("sample 风格相对路径按 Hub 根目录解析，登记后仍需显式开发挂载", () => {
     const current = fixture();
     const product = pluginFixture(current.root);

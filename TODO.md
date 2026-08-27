@@ -36,6 +36,7 @@
 ## Phoenix Admin 插件开发工作区
 
 设计、边界与点检清单见 [`docs/ADMIN-PLUGIN-DEVELOPMENT.md`](docs/ADMIN-PLUGIN-DEVELOPMENT.md)。
+Host 设置的独立点检见 [`docs/TASK-ADMIN-PLUGIN-HOST-SETTINGS.md`](docs/TASK-ADMIN-PLUGIN-HOST-SETTINGS.md)。
 
 - [x] 在“系统 → Admin 工具”提供独立“Admin 插件” Wing View，不把插件注册为网站或服务。
 - [x] 支持选择目录、识别 Manifest v2、登记多个版本，并显示 Issue、Function、BOM 等通用插件列表。
@@ -44,6 +45,8 @@
 - [x] 统一启动 Admin Host，并核验 manifest version、lifecycle、端口与声明路由。
 - [x] DDL 只代理 Admin Node 受控 dry-run；不执行 SQL、不接收发布证明、不启用 synchronize。
 - [x] 本机配置与 PostgreSQL env 路径写入 `.runtime`；连接串、token、备份路径不进入 Git。
+- [x] 在 Hub 设置集中编辑 Admin Vue/Node 开发 Host 和关联服务 ID；插件 View 只读展示并跳转，避免双入口漂移。
+- [x] 任何插件仍处于已挂载、部分挂载或路径冲突状态时，拒绝切换开发 Host。
 
 ## P0：Admin 受控测试工具 Profile
 

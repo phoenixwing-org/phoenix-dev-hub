@@ -1,6 +1,6 @@
 # Phoenix Dev Hub
 
-当前版本：**0.4.0**
+当前版本：**0.4.1**
 
 Phoenix Dev Hub 是 Phoenix 工作区内开发服务的本机控制台。它用一个 Node 进程、一个端口同时提供 Web 工作台和控制 API，不再要求记住每个仓库的启动命令与端口。
 
@@ -36,7 +36,7 @@ http://127.0.0.1:42100
 - 日志仍保留原始 stdout/stderr 来源；明确的 `Warning`、`DeprecationWarning`、Browserslist/caniuse-lite 等警告以黄色显示，其他 stderr 继续按错误显示。
 - 最近 500 行只保存在内存中；界面分别标注当前显示条数、服务端保留条数/容量和本 generation 累计条数。“清空本次会话日志”会在服务端建立新 generation，旧 cursor、后续轮询或重连均不会回填旧 500 行，新日志仍可继续追加。
 - “打开系统终端”与运行日志相互独立：仅在本机桌面会话中打开到服务目录的 macOS Terminal、Windows PowerShell/CMD 或 Linux 桌面终端，不自动执行命令；远程、SSH、容器及无桌面环境禁用。
-- “系统 → Dev Hub → Hub 设置”管理 Hub 自身：显示版本、地址与终端能力，可打开固定项目目录终端，并在二次确认后安全停止 Hub-owned 服务再关闭 Hub。没有 launchd/systemd/Docker 等外部 supervisor 时不提供会误导的假重启按钮。
+- “系统 → Dev Hub → Hub 设置”管理 Hub 自身：显示版本、地址与终端能力，可打开固定项目目录终端，并在二次确认后安全停止 Hub-owned 服务再关闭 Hub；其中“Phoenix Admin 开发支持”统一显示和编辑插件开发 Host 的 Vue/Node 根目录及服务 ID。没有 launchd/systemd/Docker 等外部 supervisor 时不提供会误导的假重启按钮。
 - Wing 工作台支持 Ribbon / Tree、三种 Ribbon 外观、Primary、Bottom 运行日志与 Footer；服务 Properties 位于左侧 Primary 的模块列表下方，默认不启用 Secondary。
 - 工作台首次打开默认暗色，服务列表首次默认按名称排序；显示偏好、服务搜索词和排序方式由 Pinia Store 持有并写入本机存储，用户切换后刷新仍保持选择。
 - 导航只有“网站”和“系统”两个大分组；网站下面一套网站一个模块，同一模块可以包含 Web、API 等多个受控进程。
@@ -57,6 +57,7 @@ http://127.0.0.1:42100
 
 - [多版本服务分组与配置模型](docs/SERVICE-PROFILE-DESIGN.md)
 - [Phoenix Admin 插件开发工作区](docs/ADMIN-PLUGIN-DEVELOPMENT.md)
+- [Phoenix Admin 开发 Host 设置点检](docs/TASK-ADMIN-PLUGIN-HOST-SETTINGS.md)
 - [Admin API 安全启动与 Hub 生命周期点检](docs/TASK-ADMIN-API-AND-HUB-LIFECYCLE.md)
 - [服务健康探测语义点检](docs/TASK-SERVICE-HEALTH-PROBE.md)
 - [Admin 插件 symlink 扫描边界点检](docs/TASK-ADMIN-PLUGIN-SYMLINK-GATES.md)

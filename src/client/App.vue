@@ -708,6 +708,7 @@ onBeforeUnmount(() => {
         @select="selectedAdminPluginId = $event"
         @changed="adminPluginChanged"
         @host-started="refreshServices"
+        @configure-host="activeNodeId = 'hub-settings'"
         @error="showError"
       />
 
@@ -724,6 +725,8 @@ onBeforeUnmount(() => {
 
       <PdhHubSettingsView
         v-else-if="activeNodeId === 'hub-settings'"
+        @admin-plugin-settings-changed="adminPluginChanged"
+        @open-service-settings="openServiceSettings"
         @error="showError"
       />
 

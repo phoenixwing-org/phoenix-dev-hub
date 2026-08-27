@@ -1,20 +1,44 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import PnwPageLayout from "phoenix-wing/layout/PnwPageLayout.vue";
-import type { HubRuntimeInfo } from "@shared/contracts";
+import type { AdminPluginWorkspaceSettings, HubRuntimeInfo } from "@shared/contracts";
 import { devHubApi } from "../api";
 
 defineOptions({ name: "PdhHubSettingsView" });
-const emit = defineEmits<{ error: [error: unknown] }>();
+const emit = defineEmits<{
+  error: [error: unknown];
+  adminPluginSettingsChanged: [];
+  openServiceSettings: [];
+}>();
 
 const info = ref<HubRuntimeInfo>();
 const confirmingShutdown = ref(false);
 const shuttingDown = ref(false);
+const adminPluginSettings = ref<AdminPluginWorkspaceSettings>();
+const adminPluginSettingsDraft = ref<AdminPluginWorkspaceSettings>();
+const editingAdminPluginSettings = ref(false);
+const savingAdminPluginSettings = ref(false);
+const adminPluginSettingsError = ref("");
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message
+    ? error.message
+    : "暂时无法读取 Phoenix Admin 开发设置";
+}
 
 async function refresh(): Promise<void> {
   try {
     info.value = await devHubApi.hubInfo();
   } catch (error) {
+    emit("error", error);
+  }
+  try {
+    const catalog = await devHubApi.adminPluginCatalog();
+    adminPluginSettings.value = catalog.settings;
+    adminPluginSettingsError.value = "";
+    if (!editingAdminPluginSettings.value) adminPluginSettingsDraft.value = { ...catalog.settings };
+  } catch (error) {
+    adminPluginSettingsError.value = errorMessage(error);
     emit("error", error);
   }
 }
@@ -35,6 +59,32 @@ async function shutdown(): Promise<void> {
   } catch (error) {
     shuttingDown.value = false;
     emit("error", error);
+  }
+}
+
+function editAdminPluginSettings(): void {
+  adminPluginSettingsDraft.value = adminPluginSettings.value && { ...adminPluginSettings.value };
+  editingAdminPluginSettings.value = true;
+}
+
+function cancelAdminPluginSettings(): void {
+  adminPluginSettingsDraft.value = adminPluginSettings.value && { ...adminPluginSettings.value };
+  editingAdminPluginSettings.value = false;
+}
+
+async function saveAdminPluginSettings(): Promise<void> {
+  if (!adminPluginSettingsDraft.value || savingAdminPluginSettings.value) return;
+  savingAdminPluginSettings.value = true;
+  try {
+    const settings = await devHubApi.updateAdminPluginSettings(adminPluginSettingsDraft.value);
+    adminPluginSettings.value = settings;
+    adminPluginSettingsDraft.value = { ...settings };
+    editingAdminPluginSettings.value = false;
+    emit("adminPluginSettingsChanged");
+  } catch (error) {
+    emit("error", error);
+  } finally {
+    savingAdminPluginSettings.value = false;
   }
 }
 
@@ -77,6 +127,47 @@ onMounted(() => void refresh());
       </article>
 
       <article class="wide-card">
+        <div class="card-heading">
+          <div>
+            <h2>Phoenix Admin 开发支持</h2>
+            <p>指定 Admin 插件“开发挂载”和“启动 Admin Host”使用的唯一 Web / API Host。本机设置保存在 <code>.runtime/admin-plugins.json</code>。</p>
+          </div>
+          <button v-if="!editingAdminPluginSettings" type="button" :disabled="!adminPluginSettings" @click="editAdminPluginSettings">编辑</button>
+        </div>
+
+        <dl v-if="adminPluginSettings && !editingAdminPluginSettings" class="admin-host-facts">
+          <div><dt>Admin Vue 根目录</dt><dd>{{ adminPluginSettings.adminWebRoot }}</dd></div>
+          <div><dt>Admin Node 根目录</dt><dd>{{ adminPluginSettings.adminNodeRoot }}</dd></div>
+          <div><dt>Web 服务 ID</dt><dd>{{ adminPluginSettings.adminWebServiceId }}</dd></div>
+          <div><dt>API 服务 ID</dt><dd>{{ adminPluginSettings.adminApiServiceId }}</dd></div>
+        </dl>
+
+        <div v-else-if="adminPluginSettingsDraft" class="admin-host-form">
+          <label><span>Admin Vue 根目录</span><input v-model="adminPluginSettingsDraft.adminWebRoot" type="text"></label>
+          <label><span>Admin Node 根目录</span><input v-model="adminPluginSettingsDraft.adminNodeRoot" type="text"></label>
+          <label><span>Web 服务 ID</span><input v-model="adminPluginSettingsDraft.adminWebServiceId" type="text"></label>
+          <label><span>API 服务 ID</span><input v-model="adminPluginSettingsDraft.adminApiServiceId" type="text"></label>
+          <div class="form-actions">
+            <button type="button" :disabled="savingAdminPluginSettings" @click="cancelAdminPluginSettings">取消</button>
+            <button type="button" class="primary" :disabled="savingAdminPluginSettings" @click="saveAdminPluginSettings">{{ savingAdminPluginSettings ? '正在保存…' : '保存本机设置' }}</button>
+          </div>
+        </div>
+
+        <p v-else class="settings-unavailable" role="status">
+          未能读取 Phoenix Admin 开发设置；请确认 Hub 正在运行且本机配置可解析，然后点击右上角刷新。
+          <small>{{ adminPluginSettingsError || '正在读取…' }}</small>
+        </p>
+
+        <p class="hint">保存时后端会验证两个目录均为 Git 根目录、服务 ID 合法；不会创建/移动插件链接，也不会启动服务、初始化数据库或修改服务清单。</p>
+      </article>
+
+      <article>
+        <h2>服务配置</h2>
+        <p>网站、端口、启动参数、干净验证 worktree 与 User 项目仍由“服务设置”管理；不要在这里复制一份服务定义。</p>
+        <button type="button" @click="emit('openServiceSettings')">打开服务设置</button>
+      </article>
+
+      <article class="wide-card">
         <h2>重启边界</h2>
         <p>{{ info?.restartMessage ?? '检测中…' }}</p>
       </article>
@@ -113,11 +204,22 @@ article { padding: 17px; border: 1px solid var(--pnw-workbench-border, #28384c);
 article h2 { margin: 0 0 9px; font-size: 14px; }
 article p { margin: 0 0 13px; }
 .wide-card { grid-column: 1 / -1; }
+.card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.card-heading h2 { margin-bottom: 5px; }
 dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; }
 dl div.wide { grid-column: 1 / -1; }
+.admin-host-facts { margin-top: 14px; }
 dt { margin-bottom: 3px; color: var(--pnw-workbench-muted, #94a3b8); font-size: 9px; text-transform: uppercase; }
 dd { margin: 0; overflow-wrap: anywhere; font: 650 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
 code { font: 650 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.admin-host-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin-top: 14px; }
+.admin-host-form label { display: grid; gap: 5px; min-width: 0; }
+.admin-host-form label span { color: var(--pnw-workbench-muted, #94a3b8); font-size: 9px; }
+.admin-host-form input { box-sizing: border-box; min-width: 0; border: 1px solid var(--pnw-workbench-border, #334155); border-radius: 6px; padding: 7px 8px; background: var(--pnw-input-bg, rgba(15,23,42,.4)); color: inherit; outline: none; }
+.form-actions { display: flex; grid-column: 1 / -1; justify-content: flex-end; gap: 8px; }
+.settings-unavailable { margin: 14px 0 0; padding: 10px 11px; border: 1px solid rgba(245,158,11,.45); border-radius: 6px; background: rgba(245,158,11,.08); color: #fbbf24; }
+.settings-unavailable small { margin-top: 5px; color: var(--pnw-workbench-muted, #94a3b8); overflow-wrap: anywhere; }
+.hint { margin-top: 12px; color: var(--pnw-workbench-muted, #94a3b8); font-size: 10px; line-height: 1.6; }
 button { min-height: 30px; padding: 0 11px; border: 1px solid var(--pnw-workbench-border, #28384c); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 button.primary { border-color: #2563eb; background: #2563eb; color: #fff; }
@@ -128,5 +230,5 @@ small { display: block; margin-top: 8px; }
 .dialog { width: min(470px, 100%); padding: 20px; border: 1px solid var(--pnw-workbench-border, #334155); border-radius: 10px; background: var(--pnw-workbench-surface, #111827); box-shadow: 0 24px 70px rgba(0,0,0,.4); }
 .dialog h2 { margin: 0 0 10px; font-size: 17px; }
 .dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
-@media (max-width: 720px) { .settings-grid { grid-template-columns: 1fr; } .wide-card { grid-column: auto; } }
+@media (max-width: 720px) { .settings-grid,.admin-host-form { grid-template-columns: 1fr; } .wide-card { grid-column: auto; } .card-heading { align-items: stretch; flex-direction: column; } }
 </style>

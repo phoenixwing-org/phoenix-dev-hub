@@ -51,7 +51,7 @@ function loadPreferences(): {
   return {
     display: pnwNormalizeWorkbenchDisplayPreferences({
       ...PNW_DEFAULT_WORKBENCH_DISPLAY_PREFERENCES,
-      colorScheme: "dark",
+      colorScheme: "system",
       layoutState: {
         ...PNW_DEFAULT_WORKBENCH_DISPLAY_PREFERENCES.layoutState,
         visibility: { primary: true, bottom: true, secondary: false },
@@ -64,7 +64,7 @@ function loadPreferences(): {
   };
 }
 
-/** 持有并持久化 Dev Hub 工作台显示偏好；首次使用默认暗色。 */
+/** 持有并持久化 Dev Hub 工作台显示偏好；首次使用跟随系统。 */
 export const usePdhWorkbenchPreferencesStore = defineStore(
   "pdhWorkbenchPreferences",
   () => {

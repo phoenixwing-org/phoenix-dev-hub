@@ -24,6 +24,8 @@ import PdhPrimaryPanel from "./components/PdhPrimaryPanel.vue";
 import PdhProcessStopConfirmation from "./components/PdhProcessStopConfirmation.vue";
 import PdhServiceConfigView from "./components/PdhServiceConfigView.vue";
 import PdhServiceTable from "./components/PdhServiceTable.vue";
+import { pdhServiceDisplayName } from "./PdhServiceDisplayName";
+import { pdhServiceRibbonIcon } from "./PdhServiceRoleIcons";
 import { usePdhWorkbenchPreferencesStore } from "./stores/PdhWorkbenchPreferencesStore";
 
 const preferences = usePdhWorkbenchPreferencesStore();
@@ -150,9 +152,9 @@ const navigationNodes = computed<readonly PnwNavigationNode[]>(() => {
         .filter((service) => service.definition.moduleId === module.id)
         .map((service, serviceIndex) => ({
           id: service.definition.id,
-          label: service.definition.name,
-          shortLabel: service.definition.name.replace(/^Phoenix\s*/i, ""),
-          icon: service.health === "ready" ? "●" : service.lifecycle === "external" ? "◆" : "○",
+          label: pdhServiceDisplayName(service.definition),
+          shortLabel: pdhServiceDisplayName(service.definition),
+          icon: pdhServiceRibbonIcon(service),
           order: serviceIndex * 10,
         })),
     }],
@@ -795,6 +797,7 @@ onBeforeUnmount(() => {
       v-if="pendingStopConfirmation"
       :details="pendingStopConfirmation.details"
       :force="pendingStopConfirmation.force"
+      :color-scheme="colorScheme"
       @cancel="resolveStopConfirmation(false)"
       @confirm="resolveStopConfirmation(true)"
     />

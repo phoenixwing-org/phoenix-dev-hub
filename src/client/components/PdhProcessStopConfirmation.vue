@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from "vue";
+import {
+  PnwOverlayThemeProvider,
+  type PnwColorScheme,
+} from "phoenix-wing";
 import type { StopTargetDetails } from "@shared/contracts";
 import { pdhProcessStopConfirmationText } from "../PdhProcessStopConfirmation";
 
 const props = defineProps<{
   readonly details: StopTargetDetails;
   readonly force: boolean;
+  readonly colorScheme: PnwColorScheme;
 }>();
 
 const emit = defineEmits<{
@@ -33,20 +38,21 @@ async function copyDetails(): Promise<void> {
 
 <template>
   <Teleport to="body">
-    <div
-      class="process-confirm-backdrop"
-      role="presentation"
-      @mousedown.self="emit('cancel')"
-      @keydown.esc.stop.prevent="emit('cancel')"
-    >
-      <section
-        class="process-confirm"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="process-confirm-title"
-        aria-describedby="process-confirm-description"
+    <PnwOverlayThemeProvider :color-scheme="colorScheme">
+      <div
+        class="process-confirm-backdrop"
+        role="presentation"
+        @mousedown.self="emit('cancel')"
+        @keydown.esc.stop.prevent="emit('cancel')"
       >
-        <header>
+        <section
+          class="process-confirm"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="process-confirm-title"
+          aria-describedby="process-confirm-description"
+        >
+          <header>
           <div>
             <small>{{ force ? 'PROCESS FORCE STOP' : 'EXTERNAL PROCESS' }}</small>
             <h2 id="process-confirm-title">
@@ -54,9 +60,9 @@ async function copyDetails(): Promise<void> {
             </h2>
           </div>
           <button type="button" class="icon-button" aria-label="取消并关闭" @click="emit('cancel')">×</button>
-        </header>
+          </header>
 
-        <div id="process-confirm-description" class="process-confirm-body">
+          <div id="process-confirm-description" class="process-confirm-body">
           <p class="warning">
             {{ force
               ? '优雅停止已超时。强制终止可能丢失未保存数据。'
@@ -90,9 +96,9 @@ async function copyDetails(): Promise<void> {
               ? '仅在身份再次复核通过后向以上精确进程组发送 SIGKILL。'
               : '确认后仍会重新核验 PID、PGID、启动时间、cwd 与端口所有者；身份变化将自动取消。' }}
           </p>
-        </div>
+          </div>
 
-        <footer>
+          <footer>
           <div class="copy-area">
             <button type="button" class="secondary" @click="copyDetails">复制全部详情</button>
             <span role="status" aria-live="polite">{{ copyFeedback }}</span>
@@ -103,17 +109,18 @@ async function copyDetails(): Promise<void> {
               {{ force ? '强制终止' : '确认关闭' }}
             </button>
           </div>
-        </footer>
-      </section>
-    </div>
+          </footer>
+        </section>
+      </div>
+    </PnwOverlayThemeProvider>
   </Teleport>
 </template>
 
 <style scoped>
 .process-confirm-backdrop { position: fixed; z-index: 10000; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(2, 6, 23, .62); }
-.process-confirm { display: flex; flex-direction: column; width: min(760px, 100%); max-height: min(760px, calc(100dvh - 36px)); overflow: hidden; border: 1px solid var(--pnw-workbench-border, #334155); border-radius: 12px; background: var(--pnw-workbench-surface, #0f172a); color: var(--pnw-workbench-fg, #e2e8f0); box-shadow: 0 24px 70px rgba(2, 6, 23, .42); }
+.process-confirm { display: flex; flex-direction: column; width: min(760px, 100%); max-height: min(760px, calc(100dvh - 36px)); overflow: hidden; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 12px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); box-shadow: 0 24px 70px rgba(2, 6, 23, .42); }
 header, footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; }
-header { border-bottom: 1px solid var(--pnw-workbench-border, #334155); }
+header { border-bottom: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
 header small { color: #ef4444; font-size: 10px; font-weight: 800; letter-spacing: .16em; }
 h2 { margin: 3px 0 0; font-size: 18px; }
 .icon-button { width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: inherit; font-size: 25px; cursor: pointer; }
@@ -126,16 +133,16 @@ dl { margin: 0; }
 .summary-grid, article dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 14px; }
 .summary-grid > div, article dl > div { min-width: 0; }
 .wide { grid-column: 1 / -1; }
-dt { margin-bottom: 2px; color: var(--pnw-workbench-muted, #94a3b8); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+dt { margin-bottom: 2px; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5; }
 .process-list { display: grid; gap: 10px; margin-top: 14px; }
-article { min-width: 0; padding: 12px; border: 1px solid var(--pnw-workbench-border, #334155); border-radius: 8px; background: var(--pnw-workbench-bg, rgba(15, 23, 42, .52)); }
+article { min-width: 0; padding: 12px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 8px; background: var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, #f8fafc)); }
 article strong { display: block; margin-bottom: 9px; font-size: 12px; }
-footer { border-top: 1px solid var(--pnw-workbench-border, #334155); }
+footer { border-top: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
 .copy-area, .decision-actions { display: flex; align-items: center; gap: 8px; }
-.copy-area span { color: var(--pnw-workbench-muted, #94a3b8); font-size: 11px; }
+.copy-area span { color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 11px; }
 button.secondary, button.danger { min-height: 34px; padding: 0 13px; border-radius: 7px; font: inherit; cursor: pointer; }
-button.secondary { border: 1px solid var(--pnw-workbench-border, #475569); background: transparent; color: inherit; }
+button.secondary { border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); background: transparent; color: inherit; }
 button.danger { border: 1px solid #dc2626; background: #dc2626; color: #fff; }
 button:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
 

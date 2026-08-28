@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import PnwPageHeader from "phoenix-wing/layout/PnwPageHeader.vue";
 import PnwPageLayout from "phoenix-wing/layout/PnwPageLayout.vue";
 import type {
   ServiceEndpointDefinition,
@@ -11,6 +12,10 @@ import {
   pdhPresentedEndpoint,
   pdhPresentedHealth,
 } from "../PdhServiceHealthPresentation";
+import {
+  pdhServiceDisplayName,
+  pdhServiceProfileDisplayName,
+} from "../PdhServiceDisplayName";
 import type { PdhServiceSortMode } from "../stores/PdhWorkbenchPreferencesStore";
 
 defineOptions({ name: "PdhServiceTable" });
@@ -186,6 +191,14 @@ type TableRow =
   | { readonly kind: "service"; readonly key: string; readonly service: ServiceRuntimeStatus };
 
 const groupedServices = computed<readonly SeriesGroup[]>(() => {
+  const configuredSeriesOrder = new Map<string, number>();
+  const configuredProfileOrder = new Map<string, number>();
+  for (const [index, service] of props.services.entries()) {
+    const sid = seriesId(service);
+    if (!configuredSeriesOrder.has(sid)) configuredSeriesOrder.set(sid, index);
+    const key = `${sid}/${profileId(service)}`;
+    if (!configuredProfileOrder.has(key)) configuredProfileOrder.set(key, index);
+  }
   const groups = new Map<string, { name: string; profiles: Map<string, ServiceRuntimeStatus[]> }>();
   for (const service of visibleServices.value) {
     const id = seriesId(service);
@@ -207,21 +220,16 @@ const groupedServices = computed<readonly SeriesGroup[]>(() => {
       evidence: services[0]?.profileEvidence,
       services: sortServices(services),
     }));
-    if (sortModeModel.value === "name") {
-      profiles = profiles.sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
-    }
+    profiles = profiles.sort((left, right) => (
+      (configuredProfileOrder.get(left.key) ?? Number.MAX_SAFE_INTEGER)
+        - (configuredProfileOrder.get(right.key) ?? Number.MAX_SAFE_INTEGER)
+    ));
     return { id, name: group.name, profiles, services: profiles.flatMap((profile) => profile.services) };
   });
-  if (sortModeModel.value === "name") {
-    result = result.sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
-  } else if (sortModeModel.value === "status") {
-    result = result.sort((left, right) => Math.min(...left.services.map(statusPriority))
-      - Math.min(...right.services.map(statusPriority)));
-  } else if (sortModeModel.value === "port") {
-    result = result.sort((left, right) => Math.min(...left.services.flatMap((item) => item.endpoints.map((e) => e.port)))
-      - Math.min(...right.services.flatMap((item) => item.endpoints.map((e) => e.port))));
-  }
-  return result;
+  return result.sort((left, right) => (
+    (configuredSeriesOrder.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+      - (configuredSeriesOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+  ));
 });
 
 const tableRows = computed<readonly TableRow[]>(() => {
@@ -377,11 +385,11 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
   <PnwPageLayout
     class="service-editor"
     title="服务进程"
-    subtitle="启动动作来自受控清单，不接受浏览器传入命令"
     aria-label="开发服务列表"
   >
-    <template #actions>
-      <div class="heading-actions">
+    <template #header>
+      <PnwPageHeader title="服务进程" :presentation-detachable="false">
+        <template #actions>
         <label class="search-control">
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <circle cx="7" cy="7" r="4" />
@@ -407,9 +415,11 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
         <button type="button" class="add-project" @click="emit('configure')">
           <span aria-hidden="true">⚙</span>服务配置
         </button>
-      </div>
+        </template>
+      </PnwPageHeader>
     </template>
 
+    <p class="page-intro">启动动作来自受控清单，不接受浏览器传入命令。</p>
     <div class="service-table-wrap">
       <div v-if="configurationErrors.length" class="configuration-alert" role="alert">
         <strong>服务配置错误</strong>
@@ -478,7 +488,7 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
                   @click.stop="toggleCollapsed('profile', row.profile.key)"
                 >
                   <span aria-hidden="true">{{ collapsedProfileIds.includes(row.profile.key) ? '›' : '⌄' }}</span>
-                  <strong>{{ row.profile.name }}</strong>
+                  <strong>{{ pdhServiceProfileDisplayName(row.profile.services[0]!.definition) }}</strong>
                   <i
                     v-if="row.profile.environmentKind"
                     class="environment-badge"
@@ -530,7 +540,7 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
             <template v-else>
             <td>
               <div class="service-title">
-                <strong>{{ row.service.definition.name }}</strong>
+                <strong>{{ pdhServiceDisplayName(row.service.definition) }}</strong>
                 <em
                   :data-source="row.service.definition.configurationSource ?? 'builtin'"
                   :title="row.service.definition.configurationOverridden ? '默认服务已有本机覆盖' : undefined"
@@ -707,18 +717,18 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
 </template>
 
 <style scoped>
-.service-editor { width: 100%; height: 100%; --pnw-page-main-block-padding: 20px; }
-.heading-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
-.search-control { width: clamp(150px, 16vw, 230px); height: 30px; display: flex; align-items: center; gap: 6px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); border-radius: 6px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); }
+.service-editor { width: 100%; height: 100%; --pnw-page-main-block-padding: 20px; --pdh-header-control-height: calc(var(--pnw-workbench-view-header-height, 40px) - 8px); }
+.page-intro { margin: 0; padding: var(--pnw-page-main-block-padding, var(--pnw-page-body-padding, 10px)) var(--pnw-page-main-block-padding, var(--pnw-page-body-padding, 10px)) 0; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 11px; line-height: 1.5; }
+.search-control { width: clamp(150px, 16vw, 230px); height: var(--pdh-header-control-height); display: flex; align-items: center; gap: 6px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); border-radius: 6px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); }
 .search-control:focus-within { border-color: var(--pnw-focus-ring, var(--pnw-workbench-default-focus, #2563eb)); box-shadow: 0 0 0 1px var(--pnw-focus-ring, var(--pnw-workbench-default-focus, #2563eb)); }
 .search-control svg { width: 13px; height: 13px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
 .search-control input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); font: inherit; font-size: 11px; }
 .search-control input::placeholder { color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #94a3b8)); }
 .search-control input::-webkit-search-cancel-button { cursor: pointer; }
-.sort-control { height: 30px; box-sizing: border-box; padding: 0 24px 0 8px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); border-radius: 6px; outline: 0; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); font: inherit; font-size: 11px; cursor: pointer; }
+.sort-control { height: var(--pdh-header-control-height); box-sizing: border-box; padding: 0 24px 0 8px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); border-radius: 6px; outline: 0; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); font: inherit; font-size: 11px; cursor: pointer; }
 .sort-control:focus-visible { border-color: var(--pnw-focus-ring, var(--pnw-workbench-default-focus, #2563eb)); box-shadow: 0 0 0 1px var(--pnw-focus-ring, var(--pnw-workbench-default-focus, #2563eb)); }
 .tree-actions { display: inline-flex; overflow: hidden; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); border-radius: 6px; }
-.tree-actions button { min-height: 28px; padding: 0 7px; border: 0; border-right: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); background: transparent; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font: inherit; font-size: 10px; cursor: pointer; }
+.tree-actions button { min-height: var(--pdh-header-control-height); padding: 0 7px; border: 0; border-right: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); background: transparent; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font: inherit; font-size: 10px; cursor: pointer; }
 .tree-actions button:last-child { border-right: 0; }
 .tree-actions button:hover { background: var(--pnw-control-hover-bg, var(--pnw-workbench-default-hover-bg, rgba(59, 130, 246, .08))); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); }
 .service-count { padding: 6px 10px; border-radius: 999px; background: var(--pnw-control-active-bg, var(--pnw-workbench-default-active-bg, rgba(37, 99, 235, .1))); color: var(--pnw-control-active-text, var(--pnw-workbench-default-active-text, #2563eb)); font-size: 12px; font-weight: 700; }
@@ -729,9 +739,9 @@ function chooseServiceConfigAction(event: Event, serviceId: string): void {
 .endpoint-column { width: 28%; }
 .pid-column { width: 8%; }
 .actions-column { width: 13%; }
-.configuration-alert { display: grid; gap: 3px; padding: 9px 14px; border-bottom: 1px solid rgba(220, 38, 38, .34); background: rgba(220, 38, 38, .1); color: var(--pnw-workbench-text, #e2e8f0); font-size: 11px; }
+.configuration-alert { display: grid; gap: 3px; padding: 9px 14px; border-bottom: 1px solid rgba(220, 38, 38, .34); background: rgba(220, 38, 38, .1); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); font-size: 11px; }
 .configuration-alert strong { color: #ef4444; font-size: 12px; }
-.configuration-alert small { color: var(--pnw-workbench-muted, #94a3b8); }
+.configuration-alert small { color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); }
 th { padding: 10px 14px; text-align: left; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); background: var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, rgba(148, 163, 184, .08))); border-bottom: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
 td { padding: 12px 10px; border-bottom: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #e2e8f0)); vertical-align: middle; font-size: 12px; }
 tbody tr { cursor: pointer; transition: background .15s ease; }
@@ -741,7 +751,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .group-cell { height: 38px; padding: 0 10px; background: var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, rgba(148, 163, 184, .08))); cursor: default; }
 .series-cell { border-top: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); }
 tbody .series-row:first-child .series-cell { border-top: 0; }
-.profile-cell { padding-left: 26px; background: color-mix(in srgb, var(--pnw-workbench-bg, #0f172a) 65%, transparent); }
+.profile-cell { padding-left: 26px; background: color-mix(in srgb, var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, #f8fafc)) 65%, transparent); }
 .group-cell-content, .group-toggle { align-items: center; }
 .group-cell-content { width: 100%; min-width: 0; display: flex; justify-content: space-between; gap: 8px; }
 .group-toggle { min-width: 0; flex: 1 1 auto; min-height: 34px; display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
@@ -811,7 +821,7 @@ button:hover:not(:disabled) { background: var(--pnw-control-hover-bg, var(--pnw-
 button:disabled { opacity: .42; cursor: not-allowed; }
 button.primary-action { background: #2563eb; border-color: #2563eb; color: #fff; }
 button.danger-action { color: #ef4444; border-color: rgba(239, 68, 68, .48); }
-.add-project { width: auto; height: 30px; display: inline-flex; align-items: center; gap: 4px; border-color: color-mix(in srgb, var(--pnw-control-active-text, #2563eb) 38%, transparent); color: var(--pnw-control-active-text, var(--pnw-workbench-default-active-text, #2563eb)); padding: 0 9px; line-height: 1; white-space: nowrap; }
+.add-project { width: auto; height: var(--pdh-header-control-height); display: inline-flex; align-items: center; gap: 4px; border-color: color-mix(in srgb, var(--pnw-control-active-text, #2563eb) 38%, transparent); color: var(--pnw-control-active-text, var(--pnw-workbench-default-active-text, #2563eb)); padding: 0 9px; line-height: 1; white-space: nowrap; }
 .add-project span { font-size: 15px; line-height: 1; }
 .more-actions { position: relative; }
 .more-actions summary { display: grid; place-items: center; width: 30px; height: 28px; box-sizing: border-box; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); border-radius: 6px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: inherit; cursor: pointer; font-size: 16px; line-height: 1; list-style: none; }

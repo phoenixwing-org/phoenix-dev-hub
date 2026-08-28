@@ -184,6 +184,51 @@
       ]
     },
     {
+      "id": "open-issue",
+      "name": "Phoenix Open Issue",
+      "template": {
+        "runtimeSlot": "open-issue",
+        "services": {
+          "app": {
+            "name": "Phoenix Open Issue",
+            "description": "旧独立网站示例；Core、API 与 Web 联合启动",
+            "command": {
+              "executable": "pnpm",
+              "args": ["dev"]
+            },
+            "endpoints": [
+              {
+                "id": "api",
+                "label": "API",
+                "port": 3400,
+                "healthUrl": "http://127.0.0.1:3400/"
+              },
+              {
+                "id": "web",
+                "label": "Web",
+                "port": 5183,
+                "openUrl": "http://127.0.0.1:5183/",
+                "healthUrl": "http://127.0.0.1:5183/"
+              }
+            ],
+            "externalStop": "confirm-matching-cwd"
+          }
+        }
+      },
+      "profiles": [
+        {
+          "id": "default",
+          "name": "默认实例",
+          "services": {
+            "app": {
+              "id": "open-issue",
+              "cwd": "../phoenix-open-issue"
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "cool-admin-midway4",
       "name": "Cool Admin Midway 4",
       "template": {
@@ -270,51 +315,6 @@
                   "MIDWAY4_DB_DATABASE": "cool_admin_midway4_validation"
                 }
               }
-            }
-          }
-        }
-      ]
-    },
-    {
-      "id": "open-issue",
-      "name": "Phoenix Open Issue",
-      "template": {
-        "runtimeSlot": "open-issue",
-        "services": {
-          "app": {
-            "name": "Phoenix Open Issue",
-            "description": "旧独立网站示例；Core、API 与 Web 联合启动",
-            "command": {
-              "executable": "pnpm",
-              "args": ["dev"]
-            },
-            "endpoints": [
-              {
-                "id": "api",
-                "label": "API",
-                "port": 3400,
-                "healthUrl": "http://127.0.0.1:3400/"
-              },
-              {
-                "id": "web",
-                "label": "Web",
-                "port": 5183,
-                "openUrl": "http://127.0.0.1:5183/",
-                "healthUrl": "http://127.0.0.1:5183/"
-              }
-            ],
-            "externalStop": "confirm-matching-cwd"
-          }
-        }
-      },
-      "profiles": [
-        {
-          "id": "default",
-          "name": "默认实例",
-          "services": {
-            "app": {
-              "id": "open-issue",
-              "cwd": "../phoenix-open-issue"
             }
           }
         }

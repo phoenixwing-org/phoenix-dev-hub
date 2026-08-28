@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import PnwPageHeader from "phoenix-wing/layout/PnwPageHeader.vue";
 import PnwPageLayout from "phoenix-wing/layout/PnwPageLayout.vue";
 import type { AdminPluginWorkspaceSettings, HubRuntimeInfo } from "@shared/contracts";
 import { devHubApi } from "../api";
@@ -95,12 +96,16 @@ onMounted(() => void refresh());
   <PnwPageLayout
     class="hub-settings"
     title="Hub 设置"
-    subtitle="管理 Dev Hub 自身；网站与 API 仍在“服务设置”中配置"
   >
-    <template #actions>
-      <button type="button" class="refresh" title="刷新 Hub 信息" aria-label="刷新 Hub 信息" @click="refresh">↻</button>
+    <template #header>
+      <PnwPageHeader title="Hub 设置" :presentation-detachable="false">
+        <template #actions>
+          <button type="button" class="refresh" title="刷新 Hub 信息" aria-label="刷新 Hub 信息" @click="refresh">↻</button>
+        </template>
+      </PnwPageHeader>
     </template>
 
+    <p class="page-intro">管理 Dev Hub 自身；网站与 API 仍在“服务设置”中配置。</p>
     <div class="settings-grid">
       <article>
         <h2>运行信息</h2>
@@ -196,11 +201,12 @@ onMounted(() => void refresh());
 </template>
 
 <style scoped>
-.hub-settings { width: 100%; height: 100%; --pnw-page-main-block-padding: 24px 28px 40px; color: var(--pnw-workbench-fg, #dbeafe); }
-article p, small { color: var(--pnw-workbench-muted, #94a3b8); font-size: 11px; line-height: 1.65; }
-.refresh { width: 30px; height: 28px; border: 1px solid var(--pnw-workbench-border, #28384c); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.hub-settings { width: 100%; height: 100%; --pnw-page-main-block-padding: 24px 28px 40px; --pdh-header-control-height: calc(var(--pnw-workbench-view-header-height, 40px) - 8px); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); }
+.page-intro { margin: 0 0 14px; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 11px; line-height: 1.5; }
+article p, small { color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 11px; line-height: 1.65; }
+.refresh { width: var(--pdh-header-control-height); height: var(--pdh-header-control-height); border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
 .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-article { padding: 17px; border: 1px solid var(--pnw-workbench-border, #28384c); border-radius: 9px; background: var(--pnw-workbench-surface, rgba(15,23,42,.56)); }
+article { padding: 17px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 9px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); }
 article h2 { margin: 0 0 9px; font-size: 14px; }
 article p { margin: 0 0 13px; }
 .wide-card { grid-column: 1 / -1; }
@@ -209,25 +215,25 @@ article p { margin: 0 0 13px; }
 dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; }
 dl div.wide { grid-column: 1 / -1; }
 .admin-host-facts { margin-top: 14px; }
-dt { margin-bottom: 3px; color: var(--pnw-workbench-muted, #94a3b8); font-size: 9px; text-transform: uppercase; }
+dt { margin-bottom: 3px; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 9px; text-transform: uppercase; }
 dd { margin: 0; overflow-wrap: anywhere; font: 650 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
 code { font: 650 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .admin-host-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin-top: 14px; }
 .admin-host-form label { display: grid; gap: 5px; min-width: 0; }
-.admin-host-form label span { color: var(--pnw-workbench-muted, #94a3b8); font-size: 9px; }
-.admin-host-form input { box-sizing: border-box; min-width: 0; border: 1px solid var(--pnw-workbench-border, #334155); border-radius: 6px; padding: 7px 8px; background: var(--pnw-input-bg, rgba(15,23,42,.4)); color: inherit; outline: none; }
+.admin-host-form label span { color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 9px; }
+.admin-host-form input { box-sizing: border-box; min-width: 0; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 6px; padding: 7px 8px; background: var(--pnw-control-bg, var(--pnw-workbench-default-control-bg, #fff)); color: inherit; outline: none; }
 .form-actions { display: flex; grid-column: 1 / -1; justify-content: flex-end; gap: 8px; }
 .settings-unavailable { margin: 14px 0 0; padding: 10px 11px; border: 1px solid rgba(245,158,11,.45); border-radius: 6px; background: rgba(245,158,11,.08); color: #fbbf24; }
-.settings-unavailable small { margin-top: 5px; color: var(--pnw-workbench-muted, #94a3b8); overflow-wrap: anywhere; }
-.hint { margin-top: 12px; color: var(--pnw-workbench-muted, #94a3b8); font-size: 10px; line-height: 1.6; }
-button { min-height: 30px; padding: 0 11px; border: 1px solid var(--pnw-workbench-border, #28384c); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.settings-unavailable small { margin-top: 5px; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); overflow-wrap: anywhere; }
+.hint { margin-top: 12px; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 10px; line-height: 1.6; }
+button { min-height: 30px; padding: 0 11px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 button.primary { border-color: #2563eb; background: #2563eb; color: #fff; }
 button.danger { border-color: rgba(239,68,68,.65); color: #ef4444; }
 .danger-zone { border-color: rgba(239,68,68,.35); }
 small { display: block; margin-top: 8px; }
 .dialog-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(2,6,23,.68); }
-.dialog { width: min(470px, 100%); padding: 20px; border: 1px solid var(--pnw-workbench-border, #334155); border-radius: 10px; background: var(--pnw-workbench-surface, #111827); box-shadow: 0 24px 70px rgba(0,0,0,.4); }
+.dialog { width: min(470px, 100%); padding: 20px; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 10px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); box-shadow: 0 24px 70px rgba(0,0,0,.4); }
 .dialog h2 { margin: 0 0 10px; font-size: 17px; }
 .dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 @media (max-width: 720px) { .settings-grid,.admin-host-form { grid-template-columns: 1fr; } .wide-card { grid-column: auto; } .card-heading { align-items: stretch; flex-direction: column; } }

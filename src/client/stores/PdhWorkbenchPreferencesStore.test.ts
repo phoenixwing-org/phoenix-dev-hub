@@ -24,9 +24,9 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("PdhWorkbenchPreferencesStore", () => {
-  it("首次使用默认暗色", () => {
+  it("首次使用跟随系统", () => {
     const store = usePdhWorkbenchPreferencesStore();
-    expect(store.colorScheme).toBe("dark");
+    expect(store.colorScheme).toBe("system");
     expect(store.layoutState.visibility.secondary).toBe(false);
     expect(store.serviceSearchQuery).toBe("");
     expect(store.serviceSortMode).toBe("name");

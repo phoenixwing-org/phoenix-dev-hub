@@ -1,6 +1,6 @@
 # Phoenix Admin 插件开发工作区
 
-状态：Phoenix Dev Hub 0.4.1 已实现装配核验边界与开发 Host 设置；产品迁移完成度仍由各产品任务验收
+状态：Phoenix Dev Hub 0.4.2 已实现装配核验边界与开发 Host 设置；产品迁移完成度仍由各产品任务验收
 适用范围：Phoenix Dev Hub 的“系统 → Admin 工具 → Admin 插件”独立 View
 
 ## 定位

@@ -1,6 +1,6 @@
 {
   "name": "phoenix-dev-hub",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "Phoenix 本机开发服务的受控启动、停止、探测与日志工作台",
   "repository": {

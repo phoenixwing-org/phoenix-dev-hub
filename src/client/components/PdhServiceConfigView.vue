@@ -81,7 +81,7 @@ const viewTitle = computed(() => {
   if (view.value === "service") return "编辑默认服务";
   return formTitle.value;
 });
-const viewSubtitle = computed(() => {
+const viewHint = computed(() => {
   if (view.value === "list") return "管理产品系列、默认服务与 User 项目";
   if (view.value === "import") return "校验并合并本机 JSON 配置";
   if (view.value === "series") return "编辑模板、版本实例与服务覆盖项";
@@ -655,24 +655,23 @@ watch(
     >
       <PnwPageHeader
         :title="viewTitle"
-        :subtitle="viewSubtitle"
+        :presentation-detachable="false"
       >
         <template #actions>
-          <div class="dialog-header-actions">
-            <template v-if="view !== 'list'">
-              <button type="button" @click="showList">返回</button>
-              <button
-                type="button"
-                class="primary"
-                :disabled="subviewPrimaryDisabled"
-                @click="submitSubview"
-              >{{ subviewPrimaryLabel }}</button>
-            </template>
-            <button v-else-if="!embedded" type="button" @click="emit('close')">完成</button>
-          </div>
+          <template v-if="view !== 'list'">
+            <button type="button" @click="showList">返回</button>
+            <button
+              type="button"
+              class="primary"
+              :disabled="subviewPrimaryDisabled"
+              @click="submitSubview"
+            >{{ subviewPrimaryLabel }}</button>
+          </template>
+          <button v-else-if="!embedded" type="button" @click="emit('close')">完成</button>
         </template>
       </PnwPageHeader>
 
+      <p class="page-intro">{{ viewHint }}</p>
       <div v-if="view === 'list'" class="dialog-content project-list-view">
         <div class="management-toolbar">
           <button type="button" class="primary compact" @click="startAdd">＋ 添加 User 项目</button>
@@ -1024,12 +1023,12 @@ watch(
 <style scoped>
 .dialog-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(15, 23, 42, .42); backdrop-filter: blur(2px); }
 .settings-view { width: 100%; height: 100%; min-height: 0; padding: 0; box-sizing: border-box; overflow: hidden; background: var(--pnw-workbench-bg, var(--pnw-workbench-default-bg, #f8fafc)); }
-.project-dialog { width: min(760px, 100%); max-height: min(820px, calc(100vh - 48px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 14px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); box-shadow: 0 24px 80px rgba(15, 23, 42, .28); }
+.project-dialog { width: min(760px, 100%); max-height: min(820px, calc(100vh - 48px)); --pdh-header-control-height: calc(var(--pnw-workbench-view-header-height, 40px) - 8px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #dbe3ed)); border-radius: 14px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: var(--pnw-workbench-text, var(--pnw-workbench-default-text, #0f172a)); box-shadow: 0 24px 80px rgba(15, 23, 42, .28); }
 .project-dialog.embedded { width: 100%; height: 100%; max-height: none; min-height: 0; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
 .project-dialog.embedded.subview { width: 100%; height: 100%; max-height: none; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
 .profile-form-list article > header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.dialog-header-actions { display: flex; align-items: center; gap: 6px; }
-.dialog-header-actions button { min-height: 30px; padding: 4px 10px; }
+.page-intro { flex: 0 0 auto; margin: 0; padding: 10px 18px 0; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 11px; line-height: 1.5; }
+:deep(.pnw-head-actions > button) { min-height: var(--pdh-header-control-height); }
 h2 { margin: 0; font-size: 18px; }
 .dialog-content { min-height: 0; flex: 1 1 auto; display: grid; gap: 14px; overflow-y: auto; padding: 18px; box-sizing: border-box; }
 .dialog-content.editor-view { width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: 20px 0 36px; }
@@ -1054,7 +1053,7 @@ h2 { margin: 0; font-size: 18px; }
 .profile-form-actions { display: flex; gap: 6px; }
 .profile-form-actions button { min-height: 27px; padding: 0 8px; cursor: pointer; }
 .profile-services-summary { align-self: end; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 10px; }
-.series-config-list li { background: color-mix(in srgb, var(--pnw-workbench-surface, #fff) 94%, #2563eb 6%); }
+.series-config-list li { background: color-mix(in srgb, var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)) 94%, #2563eb 6%); }
 label { display: grid; gap: 6px; font-size: 11px; font-weight: 700; }
 input, select, textarea, button { min-height: 34px; box-sizing: border-box; border: 1px solid var(--pnw-workbench-border, var(--pnw-workbench-default-border, #cbd5e1)); border-radius: 7px; background: var(--pnw-workbench-surface, var(--pnw-workbench-default-surface, #fff)); color: inherit; font: inherit; }
 input, select, textarea { width: 100%; padding: 7px 9px; }

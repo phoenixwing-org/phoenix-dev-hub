@@ -1,6 +1,6 @@
 # Phoenix Dev Hub
 
-当前版本：**0.4.1**
+当前版本：**0.4.2**
 
 Phoenix Dev Hub 是 Phoenix 工作区内开发服务的本机控制台。它用一个 Node 进程、一个端口同时提供 Web 工作台和控制 API，不再要求记住每个仓库的启动命令与端口。
 
@@ -38,7 +38,7 @@ http://127.0.0.1:42100
 - “打开系统终端”与运行日志相互独立：仅在本机桌面会话中打开到服务目录的 macOS Terminal、Windows PowerShell/CMD 或 Linux 桌面终端，不自动执行命令；远程、SSH、容器及无桌面环境禁用。
 - “系统 → Dev Hub → Hub 设置”管理 Hub 自身：显示版本、地址与终端能力，可打开固定项目目录终端，并在二次确认后安全停止 Hub-owned 服务再关闭 Hub；其中“Phoenix Admin 开发支持”统一显示和编辑插件开发 Host 的 Vue/Node 根目录及服务 ID。没有 launchd/systemd/Docker 等外部 supervisor 时不提供会误导的假重启按钮。
 - Wing 工作台支持 Ribbon / Tree、三种 Ribbon 外观、Primary、Bottom 运行日志与 Footer；服务 Properties 位于左侧 Primary 的模块列表下方，默认不启用 Secondary。
-- 工作台首次打开默认暗色，服务列表首次默认按名称排序；显示偏好、服务搜索词和排序方式由 Pinia Store 持有并写入本机存储，用户切换后刷新仍保持选择。
+- 工作台首次打开跟随系统浅色/深色模式；Series 与 Profile 始终遵循配置建议顺序，实例内服务首次默认按名称排序。显示偏好、服务搜索词和排序方式由 Pinia Store 持有并写入本机存储，用户切换后刷新仍保持选择。
 - 导航只有“网站”和“系统”两个大分组；网站下面一套网站一个模块，同一模块可以包含 Web、API 等多个受控进程。
 - Series 可以包含多个隔离 Profile。示例中的 Phoenix Admin 提供“开发联调”（source-mounted / DEV ONLY，9000/8101）和“发布验收环境（非正式）”（package-assembled / Registry Wing，9100/8201）两套实例，可并行独立启停、重启、打开和查看日志。
 - 示例另提供独立“Cool Admin Midway 4”组：纯 Cool Vue 8.x 使用 9200，纯 Cool Node 8.x / Midway 4 使用 8001 和精确命名的本机 PostgreSQL 联调库。它不装载 Phoenix、Wing、Pah 或业务插件；右侧 Properties 显示源码基线与人工联调帮助。

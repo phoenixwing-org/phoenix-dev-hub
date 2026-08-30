@@ -1,12 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readlinkSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -19,6 +17,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { PdhAdminPluginWorkspace } from "./PdhAdminPluginWorkspace.js";
 
 const roots: string[] = [];
+
+function directoryLink(source: string, target: string): void {
+  symlinkSync(
+    process.platform === "win32" ? path.resolve(source) : path.relative(path.dirname(target), source),
+    target,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+}
 
 function gitRoot(directory: string): void {
   mkdirSync(directory, { recursive: true });
@@ -124,7 +130,7 @@ describe("Admin 插件开发工作区", () => {
     expect(mounted.recentOperation?.changes.map((change) => String(change.action)))
       .not.toContain("synced-entities");
     for (const entry of mounted.mounts) {
-      expect(readlinkSync(entry.target)).toBe(path.relative(path.dirname(entry.target), entry.source));
+      expect(realpathSync(entry.target)).toBe(realpathSync(entry.source));
       expect(readFileSync(entry.excludePath, "utf8")).toContain(entry.excludePattern);
     }
 
@@ -187,7 +193,7 @@ describe("Admin 插件开发工作区", () => {
     for (const mount of mounted.mounts) {
       const source = mount.kind === "web" ? newCandidate.webModulePath : newCandidate.nodeModulePath;
       unlinkSync(mount.target);
-      symlinkSync(path.relative(path.dirname(mount.target), source), mount.target, "dir");
+      directoryLink(source, mount.target);
     }
 
     const updated = current.workspace.repoint(added.registration.id, newProduct);
@@ -200,9 +206,11 @@ describe("Admin 插件开发工作区", () => {
     });
     expect(updated.recentOperation?.changes.filter((change) => change.action === "claimed-link")).toHaveLength(2);
     expect(updated.mounts.every((mount) => realpathSync(mount.target) === mount.source)).toBe(true);
-    const saved = readFileSync(path.join(current.hub, ".runtime/admin-plugins.json"), "utf8");
-    expect(saved).toContain(newProduct);
-    expect(saved).not.toContain(oldProduct);
+    const saved = JSON.parse(readFileSync(path.join(current.hub, ".runtime/admin-plugins.json"), "utf8")) as {
+      plugins: readonly { productRoot: string }[];
+    };
+    expect(saved.plugins).toContainEqual(expect.objectContaining({ productRoot: realpathSync(newProduct) }));
+    expect(saved.plugins).not.toContainEqual(expect.objectContaining({ productRoot: realpathSync(oldProduct) }));
   });
 
   it("旧目录不可用时保留可理解状态，并用身份快照安全重新指向同模块", () => {
@@ -297,12 +305,12 @@ describe("Admin 插件开发工作区", () => {
     const thirdParty = path.join(current.root, "third-party-module");
     mkdirSync(thirdParty);
     unlinkSync(target.target);
-    symlinkSync(thirdParty, target.target, "dir");
+    directoryLink(thirdParty, target.target);
     expect(() => current.workspace.repoint(added.registration.id, nextProduct)).toThrow("既不指向旧目录也不指向本次新目录");
     expect(current.workspace.status(added.registration.id).registration.productRoot).toBe(realpathSync(oldProduct));
 
     unlinkSync(target.target);
-    symlinkSync(path.relative(path.dirname(target.target), target.source), target.target, "dir");
+    directoryLink(target.source, target.target);
     const duplicate = current.workspace.add(nextProduct);
     expect(() => current.workspace.repoint(added.registration.id, nextProduct)).toThrow(duplicate.registration.id);
   });
@@ -313,13 +321,14 @@ describe("Admin 插件开发工作区", () => {
     const nextProduct = pluginFixture(current.root, "0.2.0");
     const added = current.workspace.add(oldProduct);
     const mounted = current.workspace.mount(added.registration.id);
-    const runtimeDirectory = path.join(current.hub, ".runtime");
+    const configPath = path.join(current.hub, ".runtime/admin-plugins.json");
+    const blockedTemporary = `${configPath}.${process.pid}.tmp`;
 
-    chmodSync(runtimeDirectory, 0o500);
+    mkdirSync(blockedTemporary);
     try {
       expect(() => current.workspace.repoint(added.registration.id, nextProduct)).toThrow("自动回滚未完整完成");
     } finally {
-      chmodSync(runtimeDirectory, 0o700);
+      rmSync(blockedTemporary, { recursive: true, force: true });
     }
 
     for (const mount of mounted.mounts) {

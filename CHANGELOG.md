@@ -79,7 +79,7 @@
 - 分离生命周期、ownership、健康、端点可达性与当前构建状态，避免旧监听端口掩盖新构建失败。
 - 完善进程组停止、外部监控二次确认、日志 generation/cursor 清空语义和系统终端入口。
 - 发布验收统一标记为“非正式”，与预生产、生产环境明确区分。
-- 服务清单改为 `services.sample.json` + Git 忽略的 `services.user.json`，实际路径、数据库与发布证据由使用者自行管理。
+- 服务清单归档于 `config/sample/services.sample.json`，本机使用 Git 忽略的 `config/services.user.json`，实际路径、数据库与发布证据由使用者自行管理。
 
 ### 安全与发布
 

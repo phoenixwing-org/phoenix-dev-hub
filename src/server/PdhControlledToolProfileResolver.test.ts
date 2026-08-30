@@ -64,7 +64,11 @@ function hostFixture(options: HostFixtureOptions = {}): string {
   mkdirSync(path.join(root, "node_modules"), { recursive: true });
   const packageLink = path.join(root, "node_modules", "vitest");
   if (options.packageSymlinkTarget) {
-    symlinkSync(options.packageSymlinkTarget, packageLink, "dir");
+    symlinkSync(
+      options.packageSymlinkTarget,
+      packageLink,
+      process.platform === "win32" ? "junction" : "dir",
+    );
     return root;
   }
   if (options.omitPackage) return root;
@@ -161,14 +165,17 @@ describe("PdhControlledToolProfileResolver", () => {
       unavailableReason: { code: "PACKAGE_ESCAPE" },
     });
 
-    const outsideEntrypointRoot = temporaryRoot("pdh-outside-entrypoint-");
-    const outsideEntrypoint = path.join(outsideEntrypointRoot, "outside.mjs");
-    writeFileSync(outsideEntrypoint, "outside\n");
-    const entrypointEscape = hostFixture({ entrypointSymlinkTarget: outsideEntrypoint });
-    expect(new PdhControlledToolProfileResolver().resolve(entrypointEscape)).toMatchObject({
-      availability: "unavailable",
-      unavailableReason: { code: "ENTRYPOINT_ESCAPE" },
-    });
+    // Windows 的文件 symlink 需要开发者模式或管理员权限；目录 junction 已覆盖 realpath 逃逸。
+    if (process.platform !== "win32") {
+      const outsideEntrypointRoot = temporaryRoot("pdh-outside-entrypoint-");
+      const outsideEntrypoint = path.join(outsideEntrypointRoot, "outside.mjs");
+      writeFileSync(outsideEntrypoint, "outside\n");
+      const entrypointEscape = hostFixture({ entrypointSymlinkTarget: outsideEntrypoint });
+      expect(new PdhControlledToolProfileResolver().resolve(entrypointEscape)).toMatchObject({
+        availability: "unavailable",
+        unavailableReason: { code: "ENTRYPOINT_ESCAPE" },
+      });
+    }
   });
 
   it("拒绝 lock identity/integrity 与 package identity/version 错误", () => {

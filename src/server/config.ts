@@ -911,7 +911,7 @@ export function resolveServiceConfigurationPath(
   }
   throw new DevHubError(
     "INVALID_CONFIG",
-    "未找到用户服务配置：请复制 config/services.sample.json 为 config/services.user.json 并替换全部示例值",
+    "未找到用户服务配置：请复制 config/sample/services.sample.json 为 config/services.user.json 并替换全部示例值",
     500,
   );
 }

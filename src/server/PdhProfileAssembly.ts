@@ -188,7 +188,9 @@ async function extractAndVerifyPackage(assembly: ServiceProfileAssemblyPolicy): 
       409,
     );
   }
-  const entries = (await run("unzip", ["-Z1", assembly.packagePath]))
+  const entries = (process.platform === "win32"
+    ? await run("tar", ["-tf", assembly.packagePath])
+    : await run("unzip", ["-Z1", assembly.packagePath]))
     .split(/\r?\n/u)
     .filter(Boolean);
   const unique = new Set<string>();
@@ -200,7 +202,11 @@ async function extractAndVerifyPackage(assembly: ServiceProfileAssemblyPolicy): 
   }
   const extractedRoot = mkdtempSync(path.join(tmpdir(), "pdh-business-package-"));
   try {
-    await run("unzip", ["-qq", assembly.packagePath, "-d", extractedRoot]);
+    if (process.platform === "win32") {
+      await run("tar", ["-xf", assembly.packagePath, "-C", extractedRoot]);
+    } else {
+      await run("unzip", ["-qq", assembly.packagePath, "-d", extractedRoot]);
+    }
     const files = walkFiles(extractedRoot).sort();
     if (JSON.stringify(files) !== JSON.stringify([...unique].sort())) {
       throw new DevHubError("PROFILE_PREFLIGHT_FAILED", "压缩包清单与解包文件集合不一致", 409);
@@ -340,7 +346,7 @@ function lockIntegrity(lockfile: string, item: ServiceProfileRegistryPackage): s
   const escapedName = item.name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   const escapedVersion = item.version.replaceAll(".", "\\.");
   const match = text.match(new RegExp(
-    `^  ['\"]?${escapedName}@${escapedVersion}['\"]?:\\n(?:    .*\\n){0,12}?    resolution: \\{integrity: ([^}]+)\\}`,
+    `^  ['\"]?${escapedName}@${escapedVersion}['\"]?:\\r?\\n(?:    .*\\r?\\n){0,12}?    resolution: \\{integrity: ([^}]+)\\}`,
     "mu",
   ));
   if (!match) {

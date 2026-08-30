@@ -54,6 +54,32 @@ const CHECKSUM_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const MIGRATION_PATH_PATTERN = /^migrations\/[a-zA-Z0-9][a-zA-Z0-9._/-]*\.sql$/;
 const PAH_BUSINESS_GROUP = "pah-group-business";
 
+function windowsNamespacedPath(value: string): string {
+  if (value.startsWith("\\\\?\\UNC\\")) return `\\\\${value.slice(8)}`;
+  return value.startsWith("\\\\?\\") ? value.slice(4) : value;
+}
+
+function comparablePath(value: string): string {
+  const normalized = path.normalize(windowsNamespacedPath(path.resolve(value)));
+  return process.platform === "win32" ? normalized.toLocaleLowerCase("en-US") : normalized;
+}
+
+function linkTargetPath(linkPath: string, value: string): string {
+  return path.resolve(path.dirname(linkPath), windowsNamespacedPath(value));
+}
+
+function samePath(left: string | undefined, right: string): boolean {
+  return left !== undefined && comparablePath(left) === comparablePath(right);
+}
+
+function createDirectoryLink(source: string, target: string): void {
+  symlinkSync(
+    process.platform === "win32" ? path.resolve(source) : path.relative(path.dirname(target), source),
+    target,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+}
+
 function fail(code: string, message: string, statusCode = 400, details?: unknown): never {
   throw new DevHubError(code, message, statusCode, details);
 }
@@ -611,14 +637,14 @@ export class PdhAdminPluginWorkspace {
     const originals = newTargets.map((target) => {
       const oldTarget = oldTargets.find((item) => item.kind === target.kind)!;
       const link = this.#rawLinkState(target.target);
-      const actual = link.value === undefined ? undefined : path.resolve(path.dirname(target.target), link.value);
+      const actual = link.value === undefined ? undefined : linkTargetPath(target.target, link.value);
       const linkOwner = link.state === "missing"
         ? "missing"
         : link.state === "occupied"
           ? "occupied"
-          : actual === target.source
+          : samePath(actual, target.source)
             ? "new"
-            : actual === oldTarget.source
+            : samePath(actual, oldTarget.source)
               ? "old"
               : "foreign";
       const excludePath = this.#gitPath(target.hostRoot, "info/exclude");
@@ -663,12 +689,12 @@ export class PdhAdminPluginWorkspace {
         if (entry.linkOwner === "old" && entry.oldTarget.source !== entry.target.source) {
           mutatedLinks.add(entry.target.target);
           unlinkSync(entry.target.target);
-          symlinkSync(path.relative(path.dirname(entry.target.target), entry.target.source), entry.target.target, "dir");
+          createDirectoryLink(entry.target.source, entry.target.target);
           changes.push({ kind: entry.target.kind, action: "replaced-link", path: entry.target.target, detail: `${entry.oldTarget.source} → ${entry.target.source}` });
         } else if (entry.linkOwner === "missing") {
           mkdirSync(path.dirname(entry.target.target), { recursive: true });
           mutatedLinks.add(entry.target.target);
-          symlinkSync(path.relative(path.dirname(entry.target.target), entry.target.source), entry.target.target, "dir");
+          createDirectoryLink(entry.target.source, entry.target.target);
           changes.push({ kind: entry.target.kind, action: "created-link", path: entry.target.target, detail: `→ ${entry.target.source}` });
         } else {
           changes.push({ kind: entry.target.kind, action: "claimed-link", path: entry.target.target, detail: `已校验并认领现有链接 → ${entry.target.source}` });
@@ -705,13 +731,13 @@ export class PdhAdminPluginWorkspace {
         try {
           if (mutatedLinks.has(entry.target.target)) {
             const current = this.#rawLinkState(entry.target.target);
-            const currentActual = current.value === undefined ? undefined : path.resolve(path.dirname(entry.target.target), current.value);
-            if (current.state === "occupied" || (current.state === "link" && currentActual !== entry.target.source)) {
+            const currentActual = current.value === undefined ? undefined : linkTargetPath(entry.target.target, current.value);
+            if (current.state === "occupied" || (current.state === "link" && !samePath(currentActual, entry.target.source))) {
               throw new Error(`目标已被并发改动：${entry.target.target}`);
             }
             if (current.state === "link") unlinkSync(entry.target.target);
             if (entry.link.state === "link" && entry.link.value !== undefined) {
-              symlinkSync(entry.link.value, entry.target.target, "dir");
+              createDirectoryLink(linkTargetPath(entry.target.target, entry.link.value), entry.target.target);
             }
           }
           writeAtomic(entry.excludePath, entry.excludeContent);
@@ -821,7 +847,7 @@ export class PdhAdminPluginWorkspace {
         if (action === "mount") {
           if (entry.link.state === "missing") {
             mkdirSync(path.dirname(entry.target.target), { recursive: true });
-            symlinkSync(path.relative(path.dirname(entry.target.target), entry.target.source), entry.target.target, "dir");
+            createDirectoryLink(entry.target.source, entry.target.target);
             created.push(entry.target.target);
             changes.push({ kind: entry.target.kind, action: "created-link", path: entry.target.target, detail: `→ ${entry.target.source}` });
           } else {
@@ -858,7 +884,7 @@ export class PdhAdminPluginWorkspace {
       for (const target of removed.reverse()) {
         try {
           if (!existsSync(target.target)) {
-            symlinkSync(path.relative(path.dirname(target.target), target.source), target.target, "dir");
+            createDirectoryLink(target.source, target.target);
           }
         } catch { /* best effort rollback */ }
       }
@@ -954,8 +980,8 @@ export class PdhAdminPluginWorkspace {
     if (current.state === "missing") return { state: "missing" };
     if (current.state === "occupied") return { state: "occupied" };
     const value = current.value!;
-    const actual = path.resolve(path.dirname(target.target), value);
-    return actual === target.source ? { state: "mounted", value } : { state: "foreign-link", value };
+    const actual = linkTargetPath(target.target, value);
+    return samePath(actual, target.source) ? { state: "mounted", value } : { state: "foreign-link", value };
   }
 
   #rawLinkState(target: string): { state: "missing" | "occupied" | "link"; value?: string } {

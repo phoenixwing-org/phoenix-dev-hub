@@ -1,6 +1,6 @@
 # Admin 插件 symlink 扫描边界点检
 
-> 公共迁移 Skill 基线：`46e25e3041dc9a57dbbb629feedc9e4694dfcd82`
+> 公共迁移 Skill 基线以执行任务时的受控版本为准；本文不绑定具体 commit。
 > 范围：仅调整 Phoenix Dev Hub 的装配核验契约、UI 与文档；不运行或修复产品门禁，不修改 Host/产品 Git。
 
 ## 要求

@@ -27,7 +27,7 @@
 
 ### 进程确认与 ownership 恢复
 
-实施与点检清单见 [`docs/TASK-PROCESS-CONFIRMATION-AND-OWNERSHIP-RECOVERY.md`](docs/TASK-PROCESS-CONFIRMATION-AND-OWNERSHIP-RECOVERY.md)。
+实施与点检清单见 [`docs/进程确认与归属恢复点检.md`](docs/进程确认与归属恢复点检.md)。
 
 - [x] 用可滚动、可选择和可复制详情的应用内对话框替代外部停止/强制终止原生确认。
 - [x] 安全持久化 Hub-owned 根进程身份，并在 Hub 重启后经完整复核恢复 ownership。
@@ -35,8 +35,8 @@
 
 ## Phoenix Admin 插件开发工作区
 
-设计、边界与点检清单见 [`docs/ADMIN-PLUGIN-DEVELOPMENT.md`](docs/ADMIN-PLUGIN-DEVELOPMENT.md)。
-Host 设置的独立点检见 [`docs/TASK-ADMIN-PLUGIN-HOST-SETTINGS.md`](docs/TASK-ADMIN-PLUGIN-HOST-SETTINGS.md)。
+设计、边界与点检清单见 [`docs/Admin插件开发工作区.md`](docs/Admin插件开发工作区.md)。
+Host 设置的独立点检见 [`docs/Admin插件宿主设置点检.md`](docs/Admin插件宿主设置点检.md)。
 
 - [x] 在“系统 → Admin 工具”提供独立“Admin 插件” Wing View，不把插件注册为网站或服务。
 - [x] 支持选择目录、识别 Manifest v2、登记多个版本，并显示 Issue、Function、BOM 等通用插件列表。
@@ -50,7 +50,7 @@ Host 设置的独立点检见 [`docs/TASK-ADMIN-PLUGIN-HOST-SETTINGS.md`](docs/T
 
 ## P0：Admin 受控测试工具 Profile
 
-实施输入与解锁条件见 [`docs/TASK-CONTROLLED-TOOL-PROFILE.md`](docs/TASK-CONTROLLED-TOOL-PROFILE.md)。
+实施输入与解锁条件见 [`docs/Admin受控测试工具配置档点检.md`](docs/Admin受控测试工具配置档点检.md)。
 
 - [x] 已登记 Owner 锁定的 Resolver、Profile、保留环境注入、unavailable 与 fail-closed 边界。
 - [x] 排队登记阶段只记录文档，没有影响 Open Issue P0 访问窗口或运行服务。
@@ -70,7 +70,7 @@ Host 设置的独立点检见 [`docs/TASK-ADMIN-PLUGIN-HOST-SETTINGS.md`](docs/T
 
 ## 多版本服务分组
 
-设计与实现记录见 [`docs/SERVICE-PROFILE-DESIGN.md`](docs/SERVICE-PROFILE-DESIGN.md)。
+设计与实现记录见 [`docs/服务分组与配置模型.md`](docs/服务分组与配置模型.md)。
 
 - [x] 定义 Series → Profile → Service 的 version 2 配置与 version 1 兼容迁移。
 - [x] 在现有服务表外增加可折叠的二级分组树，并持久化折叠、搜索与排序偏好。

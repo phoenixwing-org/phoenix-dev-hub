@@ -24,7 +24,7 @@ http://127.0.0.1:42100
 
 ## 当前能力
 
-- 仓库只归档 `config/services.sample.json`；本机完整清单使用 Git 忽略的 `config/services.user.json`。启动/停止接口只接收稳定服务 ID，不接受浏览器临时拼接命令、参数或工作目录。
+- 仓库只归档 `config/sample/services.sample.json`；本机完整清单使用 Git 忽略的 `config/services.user.json`。启动/停止接口只接收稳定服务 ID，不接受浏览器临时拼接命令、参数或工作目录。
 - 生命周期（`starting/running/stopping/stopped/external/conflict`）、健康度（`ready/reachable/partial/unhealthy/unknown`）和 ownership 分开报告；“端口可达”表示未配置业务健康路径，“部分就绪”表示多端点中确有未就绪项，两者都不影响停止 Hub 自己拥有的进程。
 - 端口监听只是一项信号。显式非根 `healthUrl` 必须返回 HTTP 2xx 才算健康；未配置时明确报告“端口可达/健康路径未配置”，历史配置若把返回 404 的源站根路径 `/` 当作健康地址，也会降级为“未发现可用健康路径”，不会猜成启动失败或把端口监听冒充业务健康。可选 JSON `identity` 可以同时核验服务名、版本等稳定字段。
 - Hub-owned 进程的构建状态独立取自当前 stdout/stderr。明确的 TypeScript/build 失败会把健康度降为 `unhealthy`；即使旧 listener 仍返回 HTTP 2xx，也会显示“端口健康但当前构建失败”。watch 后续明确构建成功后才恢复端点健康判定。
@@ -47,7 +47,7 @@ http://127.0.0.1:42100
 - 默认项目使用 Hub 同级目录的相对路径；“系统 → Dev Hub”下的“服务设置”与“服务总览”并列，集中管理配置，不占用总览的运行操作空间。
 - 服务列表与设置 View 明确标记“默认 / 默认·已覆盖 / 已隐藏 / User”。默认服务支持本机编辑、隐藏/显示与一键重置用户配置基线；User 项目支持添加、编辑与只移出 Hub 的删除。
 - 默认服务、User 项目可单项或整套导出；整套格式为 version 2，单服务兼容导出和旧配置导入仍支持 version 1，所有导入都会重新经过后端安全校验。
-- “系统 → Admin 工具 → Admin 插件”提供独立 Wing View：选择本机产品目录、识别 Admin Plugin Manifest v2、管理 Vue/Node 开发 symlink、展示 Git exclude 与操作明细，并统一启动/核验 Admin Host。插件不会被伪装成可启动网站；详见 [`docs/ADMIN-PLUGIN-DEVELOPMENT.md`](docs/ADMIN-PLUGIN-DEVELOPMENT.md)。
+- “系统 → Admin 工具 → Admin 插件”提供独立 Wing View：选择本机产品目录、识别 Admin Plugin Manifest v2、管理 Vue/Node 开发 symlink、展示 Git exclude 与操作明细，并统一启动/核验 Admin Host。插件不会被伪装成可启动网站；详见 [`docs/Admin插件开发工作区.md`](docs/Admin插件开发工作区.md)。
 - Admin 插件的“装配核验”只报告 source commit、manifest、挂载、Host lifecycle 与路由，不冒充完整产品 verify。结果分别列出尚未记录/运行的 Host-owned 与 plugin-owned lint/typecheck/test/build；`.git/info/exclude` 只影响 Git，不是工具扫描边界。
 - Phoenix Admin Development 的 API 条目只在 Admin Node 目录执行 `pnpm dev`。Hub 不为日常开发启动注入数据库、初始化或测试工具 Profile；插件源码由独立的“Admin 插件”View 选择、修改目录和挂载。
 
@@ -55,14 +55,15 @@ http://127.0.0.1:42100
 
 ## 文档索引
 
-- [多版本服务分组与配置模型](docs/SERVICE-PROFILE-DESIGN.md)
-- [Phoenix Admin 插件开发工作区](docs/ADMIN-PLUGIN-DEVELOPMENT.md)
-- [Phoenix Admin 开发 Host 设置点检](docs/TASK-ADMIN-PLUGIN-HOST-SETTINGS.md)
-- [Admin API 安全启动与 Hub 生命周期点检](docs/TASK-ADMIN-API-AND-HUB-LIFECYCLE.md)
-- [服务健康探测语义点检](docs/TASK-SERVICE-HEALTH-PROBE.md)
-- [Admin 插件 symlink 扫描边界点检](docs/TASK-ADMIN-PLUGIN-SYMLINK-GATES.md)
-- [Admin 受控测试工具 Profile 点检](docs/TASK-CONTROLLED-TOOL-PROFILE.md)
-- [Admin 系列多环境 Profile 点检](docs/TASK-ADMIN-MULTI-PROFILE.md)
+- [多版本服务分组与配置模型](docs/服务分组与配置模型.md)
+- [Phoenix Admin 插件开发工作区](docs/Admin插件开发工作区.md)
+- [Phoenix Admin 双轨开发模式（Windows）](docs/Windows下Phoenix-Admin双轨开发模式.md)
+- [Phoenix Admin 开发 Host 设置点检](docs/Admin插件宿主设置点检.md)
+- [Admin API 安全启动与 Hub 生命周期点检](docs/Admin-API安全启动与Hub生命周期点检.md)
+- [服务健康探测语义点检](docs/服务健康探测语义点检.md)
+- [Admin 插件 symlink 扫描边界点检](docs/Admin插件链接扫描边界点检.md)
+- [Admin 受控测试工具 Profile 点检](docs/Admin受控测试工具配置档点检.md)
+- [Admin 系列多环境 Profile 点检](docs/Admin系列多环境配置档点检.md)
 - [后续任务清单](TODO.md)
 
 ## Wing 0.7.1 依赖策略
@@ -106,18 +107,18 @@ Wing、Vue 或通用基础设施：
 
 ## 配置服务与项目
 
-可归档示例位于 `config/services.sample.json`。首次使用时复制为本机文件并逐项替换示例值：
+可归档示例位于 `config/sample/services.sample.json`。首次使用时复制为本机文件并逐项替换示例值：
 
 ```bash
-cp config/services.sample.json config/services.user.json
+cp config/sample/services.sample.json config/services.user.json
 ```
 
 Hub 不会自动执行 sample；复制后必须复核 `.worktrees`、commit、SHA、integrity、数据库与端口。`services.user.json` 不进入 Git，由使用者与 `.runtime` 一起自行备份。为兼容早期安装，未迁移的 `config/services.json` 仍可读取，但也已受 Git 忽略。加载优先级为 `services.user.json`、旧 `services.json`；两者都不存在时启动会明确提示初始化。每个实际清单项必须包含：
 
 Windows 与 Linux 的完整目录示例、Admin Host worktree 创建、Open Issue / Acme 品牌插件开发挂载流程见
-[`docs/LOCAL-CONFIGURATION-GUIDE.md`](docs/LOCAL-CONFIGURATION-GUIDE.md)。对应文件为
-`config/services.windows.sample.json`、`config/services.linux.sample.json`、
-`config/admin-plugins.windows.sample.json` 与 `config/admin-plugins.linux.sample.json`；只复制与当前系统匹配的一套。
+[`docs/本地配置指南.md`](docs/本地配置指南.md)。对应文件为
+`config/sample/services.windows.sample.json`、`config/sample/services.linux.sample.json`、
+`config/sample/admin-plugins.windows.sample.json` 与 `config/sample/admin-plugins.linux.sample.json`；只复制与当前系统匹配的一套。
 
 已经保存的配置若只是工作目录或发布包路径暂时不存在，Hub 仍会启动并保留对应条目；后端只汇总输出一次警告，网页显示具体配置错误，并在 spawn 前拒绝启动该条目。JSON 结构、服务 ID、端口及安全策略等配置仍按严格规则校验。
 
@@ -166,7 +167,7 @@ Admin 插件登记可从公开模板开始：
 
 ```bash
 mkdir -p .runtime
-cp config/admin-plugins.sample.json .runtime/admin-plugins.json
+cp config/sample/admin-plugins.sample.json .runtime/admin-plugins.json
 ```
 
 模板路径相对 Hub 根目录解析，示例包含 Admin Vue/Node Host 与 Open Issue、Acme 品牌插件两个登记。
@@ -206,7 +207,7 @@ pnpm admin:release:reset -- --profile release-validation --username admin
 API 或 Git 中写出密码。
 
 受控测试工具 Resolver 仍保留为独立底层能力，但不再自动关联日常 Admin API 启动条目。历史设计与安全边界见
-[`docs/TASK-CONTROLLED-TOOL-PROFILE.md`](docs/TASK-CONTROLLED-TOOL-PROFILE.md)。
+[`docs/Admin受控测试工具配置档点检.md`](docs/Admin受控测试工具配置档点检.md)。
 
 ## API
 

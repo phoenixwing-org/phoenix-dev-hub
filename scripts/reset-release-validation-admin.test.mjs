@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import path from "node:path";
 import {
   assertServicesStopped,
   parseArgs,
@@ -46,14 +47,15 @@ function fixture() {
 
 describe("release-validation 管理员重置入口", () => {
   it("优先读取用户配置且不会执行 sample", () => {
+    const root = path.resolve("workspace");
+    const userConfig = path.join(root, "config/services.user.json");
     const existing = new Set([
-      "/workspace/config/services.user.json",
-      "/workspace/config/services.sample.json",
+      userConfig,
+      path.join(root, "config/sample/services.sample.json"),
     ]);
-    expect(resolveConfigPath("/workspace", candidate => existing.has(candidate)))
-      .toBe("/workspace/config/services.user.json");
-    existing.delete("/workspace/config/services.user.json");
-    expect(() => resolveConfigPath("/workspace", candidate => existing.has(candidate)))
+    expect(resolveConfigPath(root, candidate => existing.has(candidate))).toBe(userConfig);
+    existing.delete(userConfig);
+    expect(() => resolveConfigPath(root, candidate => existing.has(candidate)))
       .toThrow("用户服务配置");
   });
 

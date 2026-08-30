@@ -308,10 +308,14 @@ describe("PdhPostgresPreflight", () => {
         path.join(root, ".runtime/database-evidence/release-site--release-validation.json"),
         "utf8",
       );
-      expect(statSync(path.join(
+      const evidenceStat = statSync(path.join(
         root,
         ".runtime/database-evidence/release-site--release-validation.json",
-      )).mode & 0o777).toBe(0o600);
+      ));
+      expect(evidenceStat.isFile()).toBe(true);
+      if (process.platform !== "win32") {
+        expect(evidenceStat.mode & 0o777).toBe(0o600);
+      }
       expect(evidence).toContain('"actionState": "created"');
       expect(evidence).toContain('"existingBefore": false');
       expect(evidence).not.toContain("fixture-secret");

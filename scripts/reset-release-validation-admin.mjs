@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -27,7 +25,7 @@ export function resolveConfigPath(root, exists = fs.existsSync) {
     .map(relativePath => path.join(root, relativePath))
     .find(exists);
   if (!candidate) {
-    fail("未找到用户服务配置：请先从 config/services.sample.json 创建 config/services.user.json");
+    fail("未找到用户服务配置：请先从 config/sample/services.sample.json 创建 config/services.user.json");
   }
   return candidate;
 }

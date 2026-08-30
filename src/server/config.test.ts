@@ -20,7 +20,7 @@ describe("services.json", () => {
   it("Windows 与 Linux 示例保留当前服务拓扑和开发插件登记", () => {
     for (const platform of ["windows", "linux"]) {
       const serviceSample = JSON.parse(readFileSync(
-        path.join(projectRoot, "config", `services.${platform}.sample.json`),
+        path.join(projectRoot, "config", "sample", `services.${platform}.sample.json`),
         "utf8",
       ));
       expect(serviceSample.version).toBe(2);
@@ -37,7 +37,7 @@ describe("services.json", () => {
       expect(serviceSample.series[0].profiles[1].services.api.id).toBe("admin-clean-validation-api");
 
       const pluginSample = JSON.parse(readFileSync(
-        path.join(projectRoot, "config", `admin-plugins.${platform}.sample.json`),
+        path.join(projectRoot, "config", "sample", `admin-plugins.${platform}.sample.json`),
         "utf8",
       ));
       expect(pluginSample.version).toBe(1);
@@ -108,7 +108,9 @@ describe("services.json", () => {
     const configRoot = path.join(root, "config");
     mkdirSync(configRoot);
     try {
-      writeFileSync(path.join(configRoot, "services.sample.json"), "{}\n");
+      const sampleRoot = path.join(configRoot, "sample");
+      mkdirSync(sampleRoot);
+      writeFileSync(path.join(sampleRoot, "services.sample.json"), "{}\n");
       expect(() => resolveServiceConfigurationPath(root)).toThrow("用户服务配置");
 
       writeFileSync(path.join(configRoot, "services.json"), "{}\n");

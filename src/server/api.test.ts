@@ -149,7 +149,7 @@ describe("项目配置 API", () => {
     }>(`${fixture.baseUrl}/api/hub`);
     expect(info).toMatchObject({
       version: "test-version",
-      projectRoot: path.dirname(fixture.first) + "/phoenix-dev-hub",
+      projectRoot: path.join(path.dirname(fixture.first), "phoenix-dev-hub"),
       restartSupported: false,
     });
 

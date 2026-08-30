@@ -38,6 +38,9 @@ const routedHealthFixturePath = path.join(projectRoot, "test/fixtures/routed-hea
 const managers: PdhServiceManager[] = [];
 const externalChildren: ChildProcess[] = [];
 const temporaryRoots: string[] = [];
+const platformTimeout = (milliseconds: number): number => (
+  process.platform === "win32" ? milliseconds * 3 : milliseconds
+);
 
 async function freePort(): Promise<number> {
   const server = createServer();
@@ -205,7 +208,7 @@ describe("PdhServiceManager", () => {
     expect(await waitForState(reloadedManager, service.id, (status) => status.lifecycle === "stopped"))
       .toMatchObject({ ownership: "none", managed: false });
     expect(new PdhServiceOwnershipStore(runtimeRoot).entries()).toHaveLength(0);
-  }, 20_000);
+  }, platformTimeout(20_000));
 
   it("持久记录 PID 身份过期时撤销恢复并按外部进程重新检测", async () => {
     const port = await freePort();
@@ -228,7 +231,7 @@ describe("PdhServiceManager", () => {
     expect(await waitForState(manager, service.id, (status) => status.lifecycle === "external"))
       .toMatchObject({ ownership: "external", managed: false, logSource: "monitoring-only" });
     expect(store.entries()).toHaveLength(0);
-  }, 15_000);
+  }, platformTimeout(15_000));
 
   it("恢复时端口已换主则拒绝 Hub ownership，且不得误杀任一外部进程", async () => {
     const targetPort = await freePort();
@@ -450,7 +453,7 @@ describe("PdhServiceManager", () => {
     await manager.start(develop.id);
     expect((await waitForState(manager, develop.id, (status) => status.health === "ready")))
       .toMatchObject({ lifecycle: "running", ownership: "hub" });
-  }, 20_000);
+  }, platformTimeout(20_000));
 
   it("独立 runtimeSlot 的同系列 Profile 可并行、独立重启并在 Hub 重建后恢复外部状态", async () => {
     const [developmentPort, releasePort] = await Promise.all([freePort(), freePort()]);
@@ -547,7 +550,7 @@ describe("PdhServiceManager", () => {
       .toMatchObject({ ownership: "external", profileEvidence: { databaseName: "admin_development_db" } });
     expect(await waitForState(reloadedManager, release.id, (status) => status.lifecycle === "external"))
       .toMatchObject({ ownership: "external", profileEvidence: { databaseName: "admin_release_db" } });
-  }, 25_000);
+  }, platformTimeout(25_000));
 
   it("production Profile 只允许状态探测，启动、停止与重启均 fail-closed", async () => {
     const port = await freePort();
@@ -838,7 +841,8 @@ describe("PdhServiceManager", () => {
       processGroupId: ready.pid,
       cwd: projectRoot,
     });
-    expect(ready.rootProcess?.sessionId).toBeTypeOf("number");
+    if (process.platform === "win32") expect(ready.rootProcess?.sessionId).toBeUndefined();
+    else expect(ready.rootProcess?.sessionId).toBeTypeOf("number");
     expect(["??", "?", "none"]).toContain(ready.rootProcess?.tty);
     const beforeClear = await manager.logs(service.id);
     expect(beforeClear.entries.some(
@@ -856,7 +860,7 @@ describe("PdhServiceManager", () => {
     expect(afterClear.entries.length).toBeGreaterThan(0);
     expect(afterClear.entries.some((entry) => entry.text.includes("fixture-ready"))).toBe(false);
     expect((await manager.stop(service.id)).lifecycle).toBe("stopped");
-  }, 15_000);
+  }, platformTimeout(15_000));
 
   it("当前构建失败时不被健康端口的 HTTP 200 掩盖，并可由后续成功构建恢复", async () => {
     const failedPort = await freePort();
@@ -899,7 +903,7 @@ describe("PdhServiceManager", () => {
       (status) => status.build.state === "ready" && status.health === "ready",
     );
     expect(recovered).toMatchObject({ build: { state: "ready" }, health: "ready" });
-  }, 15_000);
+  }, platformTimeout(15_000));
 
   it("区分显式 HTTP 健康路径、根路由缺失与仅端口可达", async () => {
     const [unverifiedPort, verifiedPort, rootFallbackPort, wrongPathPort] = await Promise.all([
@@ -1012,7 +1016,7 @@ describe("PdhServiceManager", () => {
       probeMessage: "健康路径返回 HTTP 404",
     });
     await manager.stop(wrongPath.id);
-  }, 25_000);
+  }, platformTimeout(25_000));
 
   it("停止整个 watch 进程组，监听子进程重生后也不会遗留或再次拉起", async () => {
     const port = await freePort();
@@ -1036,7 +1040,7 @@ describe("PdhServiceManager", () => {
     expect(stopped.lifecycle).toBe("stopped");
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect((await manager.status(service.id)).endpoints[0].pids).toEqual([]);
-  }, 15_000);
+  }, platformTimeout(15_000));
 
   it("部分就绪仍可停止，且不会误杀其他服务进程组", async () => {
     const [partialPort, missingPort, otherPort] = await Promise.all([freePort(), freePort(), freePort()]);
@@ -1188,7 +1192,8 @@ describe("PdhServiceManager", () => {
     expect(replacement.exitCode).toBeNull();
   }, 15_000);
 
-  it("外部进程优雅停止超时后必须再次确认，才会精确 SIGKILL", async () => {
+  // Windows 的 Node.js SIGTERM 使用 TerminateProcess，无法构造可拒绝 SIGTERM 的进程。
+  it.skipIf(process.platform === "win32")("外部进程优雅停止超时后必须再次确认，才会精确 SIGKILL", async () => {
     const port = await freePort();
     const service = definition("stubborn-service", port, stubbornFixturePath);
     const child = await spawnExternal(stubbornFixturePath, port);

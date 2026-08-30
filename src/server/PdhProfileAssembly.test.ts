@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -100,10 +100,17 @@ function createPackage(root: string, wingPeer = ">=0.6.2 <0.7.0"): string {
     })),
   });
   const archive = path.join(root, "sample-plugin.pah.cool");
-  execFileSync("zip", ["-X", "-q", "-D", archive, "-@"], {
-    cwd: stage,
-    input: `${[...files, "integrity.json"].sort().join("\n")}\n`,
-  });
+  const archiveFiles = [...files, "integrity.json"].sort();
+  if (process.platform === "win32") {
+    const zipArchive = path.join(root, "sample-plugin.zip");
+    execFileSync("tar", ["-a", "-cf", zipArchive, ...archiveFiles], { cwd: stage });
+    renameSync(zipArchive, archive);
+  } else {
+    execFileSync("zip", ["-X", "-q", "-D", archive, "-@"], {
+      cwd: stage,
+      input: `${archiveFiles.join("\n")}\n`,
+    });
+  }
   return archive;
 }
 

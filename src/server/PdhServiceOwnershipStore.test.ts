@@ -43,7 +43,11 @@ describe("PdhServiceOwnershipStore", () => {
     });
 
     const file = path.join(projectRoot, ".runtime/ownership.json");
-    expect(statSync(file).mode & 0o777).toBe(0o600);
+    const fileStat = statSync(file);
+    expect(fileStat.isFile()).toBe(true);
+    if (process.platform !== "win32") {
+      expect(fileStat.mode & 0o777).toBe(0o600);
+    }
     expect(JSON.parse(readFileSync(file, "utf8"))).toMatchObject({
       version: 1,
       records: [{ serviceId: "admin-api", ports: [8101] }],

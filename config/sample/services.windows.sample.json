@@ -1,5 +1,5 @@
 {
-  "sampleNotice": "Linux 示例。复制为 config/services.user.json 后使用；假定所有仓库位于 /opt/phoenix 且当前用户拥有该目录。先按 docs/LOCAL-CONFIGURATION-GUIDE.md 建立两个 Admin Host worktree，再逐项替换路径、Git ref、端口和环境变量。示例不包含密码、DSN、token 或真实数据库名。",
+  "sampleNotice": "Windows 示例。复制为 config/services.user.json 后使用；假定所有仓库位于 E:\\phoenix。先按 docs/本地配置指南.md 建立两个 Admin Host worktree，再逐项替换路径、Git ref、端口和环境变量。示例不包含密码、DSN、token 或真实数据库名。",
   "version": 2,
   "series": [
     {
@@ -59,11 +59,11 @@
           "services": {
             "web": {
               "id": "admin-web",
-              "cwd": "/opt/phoenix/phoenix-admin-vue"
+              "cwd": "E:\\phoenix\\phoenix-admin-vue"
             },
             "api": {
               "id": "admin-api",
-              "cwd": "/opt/phoenix/phoenix-admin-node"
+              "cwd": "E:\\phoenix\\phoenix-admin-node"
             }
           }
         },
@@ -78,7 +78,7 @@
             "web": {
               "id": "admin-clean-validation-web",
               "name": "Phoenix Admin 干净验证 Web",
-              "cwd": "/opt/phoenix/.worktrees/phoenix-admin-clean-validation/vue",
+              "cwd": "E:\\phoenix\\.worktrees\\phoenix-admin-clean-validation\\vue",
               "command": {
                 "args": ["dev", "--host", "127.0.0.1", "--strictPort", "--port", "9100"]
               },
@@ -95,7 +95,7 @@
             "api": {
               "id": "admin-clean-validation-api",
               "name": "Phoenix Admin 干净验证 API",
-              "cwd": "/opt/phoenix/.worktrees/phoenix-admin-clean-validation/node",
+              "cwd": "E:\\phoenix\\.worktrees\\phoenix-admin-clean-validation\\node",
               "command": {
                 "args": ["dev"],
                 "env": {
@@ -175,11 +175,11 @@
           "services": {
             "web": {
               "id": "cool-admin-midway4-web",
-              "cwd": "/opt/phoenix/.worktrees/phoenix-admin-midway4/vue"
+              "cwd": "E:\\phoenix\\.worktrees\\phoenix-admin-midway4\\vue"
             },
             "api": {
               "id": "cool-admin-midway4-api",
-              "cwd": "/opt/phoenix/.worktrees/phoenix-admin-midway4/node",
+              "cwd": "E:\\phoenix\\.worktrees\\phoenix-admin-midway4\\node",
               "command": {
                 "env": {
                   "MIDWAY4_DB_HOST": "127.0.0.1",
@@ -232,7 +232,7 @@
           "services": {
             "app": {
               "id": "open-issue",
-              "cwd": "/opt/phoenix/phoenix-open-issue"
+              "cwd": "E:\\phoenix\\phoenix-open-issue"
             }
           }
         }

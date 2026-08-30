@@ -6,6 +6,190 @@ import type { ProcessSummary } from "../shared/contracts.js";
 
 const execFileAsync = promisify(execFile);
 
+const WINDOWS_PROCESS_QUERY_PID_ENV = "PHOENIX_DEV_HUB_PROCESS_QUERY_PID";
+const WINDOWS_PROCESS_QUERY_DESCENDANTS_ENV = "PHOENIX_DEV_HUB_PROCESS_QUERY_DESCENDANTS";
+const WINDOWS_PROCESS_DISCOVERY_SCRIPT = String.raw`
+$source = @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace PhoenixDevHub {
+  public static class ProcessCurrentDirectory {
+    private const uint PROCESS_VM_READ = 0x0010;
+    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    private const int PROCESS_BASIC_INFORMATION_CLASS = 0;
+    private const int PROCESS_WOW64_INFORMATION_CLASS = 26;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PROCESS_BASIC_INFORMATION {
+      public IntPtr Reserved1;
+      public IntPtr PebBaseAddress;
+      public IntPtr Reserved2_0;
+      public IntPtr Reserved2_1;
+      public IntPtr UniqueProcessId;
+      public IntPtr Reserved3;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint access, bool inheritHandle, int processId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool ReadProcessMemory(
+      IntPtr process,
+      IntPtr address,
+      [Out] byte[] buffer,
+      int size,
+      out IntPtr bytesRead
+    );
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    [DllImport("ntdll.dll")]
+    private static extern int NtQueryInformationProcess(
+      IntPtr process,
+      int informationClass,
+      ref PROCESS_BASIC_INFORMATION information,
+      int informationLength,
+      out int returnLength
+    );
+
+    [DllImport("ntdll.dll")]
+    private static extern int NtQueryInformationProcess(
+      IntPtr process,
+      int informationClass,
+      ref IntPtr information,
+      int informationLength,
+      out int returnLength
+    );
+
+    public static string TryRead(int processId) {
+      IntPtr process = OpenProcess(
+        PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION,
+        false,
+        processId
+      );
+      if (process == IntPtr.Zero) return null;
+      try {
+        IntPtr pebAddress;
+        bool targetIs32Bit;
+        if (Environment.Is64BitProcess) {
+          IntPtr wow64Peb = IntPtr.Zero;
+          int ignored;
+          int wow64Status = NtQueryInformationProcess(
+            process,
+            PROCESS_WOW64_INFORMATION_CLASS,
+            ref wow64Peb,
+            IntPtr.Size,
+            out ignored
+          );
+          targetIs32Bit = wow64Status == 0 && wow64Peb != IntPtr.Zero;
+          pebAddress = targetIs32Bit ? wow64Peb : ReadPebAddress(process);
+        } else {
+          targetIs32Bit = true;
+          pebAddress = ReadPebAddress(process);
+        }
+        if (pebAddress == IntPtr.Zero) return null;
+
+        int processParametersOffset = targetIs32Bit ? 0x10 : 0x20;
+        IntPtr processParameters = ReadPointer(process, Add(pebAddress, processParametersOffset), targetIs32Bit);
+        if (processParameters == IntPtr.Zero) return null;
+
+        int currentDirectoryOffset = targetIs32Bit ? 0x24 : 0x38;
+        byte[] unicodeString = ReadBytes(
+          process,
+          Add(processParameters, currentDirectoryOffset),
+          targetIs32Bit ? 8 : 16
+        );
+        int byteLength = BitConverter.ToUInt16(unicodeString, 0);
+        if (byteLength <= 0 || byteLength > 32768 || (byteLength % 2) != 0) return null;
+        int pointerOffset = targetIs32Bit ? 4 : 8;
+        IntPtr bufferAddress = targetIs32Bit
+          ? new IntPtr(BitConverter.ToUInt32(unicodeString, pointerOffset))
+          : new IntPtr(BitConverter.ToInt64(unicodeString, pointerOffset));
+        if (bufferAddress == IntPtr.Zero) return null;
+        return Encoding.Unicode.GetString(ReadBytes(process, bufferAddress, byteLength));
+      } catch {
+        return null;
+      } finally {
+        CloseHandle(process);
+      }
+    }
+
+    private static IntPtr ReadPebAddress(IntPtr process) {
+      PROCESS_BASIC_INFORMATION information = new PROCESS_BASIC_INFORMATION();
+      int ignored;
+      int status = NtQueryInformationProcess(
+        process,
+        PROCESS_BASIC_INFORMATION_CLASS,
+        ref information,
+        Marshal.SizeOf(typeof(PROCESS_BASIC_INFORMATION)),
+        out ignored
+      );
+      return status == 0 ? information.PebBaseAddress : IntPtr.Zero;
+    }
+
+    private static IntPtr ReadPointer(IntPtr process, IntPtr address, bool pointerIs32Bit) {
+      byte[] bytes = ReadBytes(process, address, pointerIs32Bit ? 4 : 8);
+      return pointerIs32Bit
+        ? new IntPtr(BitConverter.ToUInt32(bytes, 0))
+        : new IntPtr(BitConverter.ToInt64(bytes, 0));
+    }
+
+    private static byte[] ReadBytes(IntPtr process, IntPtr address, int size) {
+      byte[] bytes = new byte[size];
+      IntPtr bytesRead;
+      if (!ReadProcessMemory(process, address, bytes, size, out bytesRead) || bytesRead.ToInt64() != size) {
+        throw new Win32Exception(Marshal.GetLastWin32Error());
+      }
+      return bytes;
+    }
+
+    private static IntPtr Add(IntPtr address, int offset) {
+      return new IntPtr(address.ToInt64() + offset);
+    }
+  }
+}
+'@
+
+Add-Type -TypeDefinition $source -Language CSharp -ErrorAction Stop
+$targetPid = 0
+[void][int]::TryParse($env:${WINDOWS_PROCESS_QUERY_PID_ENV}, [ref]$targetPid)
+$includeDescendants = $env:${WINDOWS_PROCESS_QUERY_DESCENDANTS_ENV} -eq '1'
+$processes = if ($includeDescendants -and $targetPid -gt 0) {
+  $rows = @(Get-CimInstance Win32_Process)
+  $memberIds = [System.Collections.Generic.HashSet[int]]::new()
+  [void]$memberIds.Add($targetPid)
+  do {
+    $changed = $false
+    foreach ($row in $rows) {
+      if ($memberIds.Contains([int]$row.ParentProcessId) -and $memberIds.Add([int]$row.ProcessId)) {
+        $changed = $true
+      }
+    }
+  } while ($changed)
+  @($rows | Where-Object { $memberIds.Contains([int]$_.ProcessId) })
+} elseif ($targetPid -gt 0) {
+  @(Get-CimInstance Win32_Process -Filter "ProcessId = $targetPid")
+} else {
+  @()
+}
+$processes | ForEach-Object {
+  [pscustomobject]@{
+    ProcessId = $_.ProcessId
+    ParentProcessId = $_.ParentProcessId
+    CommandLine = $_.CommandLine
+    CreationDate = $_.CreationDate
+    CurrentDirectory = [PhoenixDevHub.ProcessCurrentDirectory]::TryRead($_.ProcessId)
+  }
+} | ConvertTo-Json -Compress
+`;
+const WINDOWS_PROCESS_DISCOVERY_COMMAND = Buffer
+  .from(WINDOWS_PROCESS_DISCOVERY_SCRIPT, "utf16le")
+  .toString("base64");
+
 async function outputOrEmpty(command: string, args: readonly string[]): Promise<string> {
   try {
     const result = await execFileAsync(command, [...args], {
@@ -20,9 +204,16 @@ async function outputOrEmpty(command: string, args: readonly string[]): Promise<
 }
 
 async function windowsListenerPids(port: number): Promise<readonly number[]> {
-  const command = `(Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction SilentlyContinue).OwningProcess`;
-  const output = await outputOrEmpty("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", command]);
-  return output.split(/\s+/).map(Number).filter((pid) => Number.isInteger(pid) && pid > 0);
+  const output = await outputOrEmpty("netstat.exe", ["-ano", "-p", "tcp"]);
+  return [...new Set(output.split(/\r?\n/u).flatMap((line) => {
+    const columns = line.trim().split(/\s+/u);
+    if (columns.length < 5 || columns[0]?.toUpperCase() !== "TCP" || columns[3]?.toUpperCase() !== "LISTENING") {
+      return [];
+    }
+    const localPort = Number(columns[1]?.match(/:(\d+)$/u)?.[1]);
+    const pid = Number(columns.at(-1));
+    return localPort === port && Number.isInteger(pid) && pid > 0 ? [pid] : [];
+  }))];
 }
 
 export async function listenerPids(port: number): Promise<readonly number[]> {
@@ -40,30 +231,54 @@ async function cwdForPid(pid: number): Promise<string | undefined> {
   return output.split("\n").find((line) => line.startsWith("n"))?.slice(1) || undefined;
 }
 
-async function windowsProcess(pid: number): Promise<ProcessSummary | undefined> {
-  const command = [
-    `Get-CimInstance Win32_Process -Filter \"ProcessId = ${pid}\"`,
-    "Select-Object ProcessId,ParentProcessId,CommandLine,CreationDate",
-    "ConvertTo-Json -Compress",
-  ].join(" | ");
-  const output = (await outputOrEmpty(
-    "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-Command", command],
-  )).trim();
-  if (!output) return undefined;
+async function windowsProcessRows(
+  pid: number,
+  includeDescendants = false,
+): Promise<readonly Record<string, unknown>[]> {
   try {
-    const value = JSON.parse(output) as Record<string, unknown>;
-    return {
-      pid,
-      parentPid: Number(value.ParentProcessId) || undefined,
-      processGroupId: pid,
-      command: typeof value.CommandLine === "string" ? value.CommandLine : undefined,
-      startedAt: typeof value.CreationDate === "string" ? value.CreationDate : undefined,
-      tty: "none",
-    };
+    const result = await execFileAsync("powershell.exe", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-EncodedCommand",
+      WINDOWS_PROCESS_DISCOVERY_COMMAND,
+    ], {
+      encoding: "utf8",
+      timeout: 5_000,
+      maxBuffer: 2 * 1024 * 1024,
+      env: {
+        ...process.env,
+        [WINDOWS_PROCESS_QUERY_PID_ENV]: String(pid),
+        [WINDOWS_PROCESS_QUERY_DESCENDANTS_ENV]: includeDescendants ? "1" : "0",
+      },
+    });
+    const output = result.stdout.trim();
+    if (!output) return [];
+    const raw = JSON.parse(output) as Record<string, unknown> | readonly Record<string, unknown>[];
+    return Array.isArray(raw) ? raw : [raw as Record<string, unknown>];
   } catch {
-    return undefined;
+    return [];
   }
+}
+
+function windowsProcessSummary(row: Record<string, unknown>): ProcessSummary | undefined {
+  const pid = Number(row.ProcessId);
+  if (!Number.isInteger(pid) || pid <= 0) return undefined;
+  return {
+    pid,
+    parentPid: Number(row.ParentProcessId) || undefined,
+    processGroupId: pid,
+    cwd: typeof row.CurrentDirectory === "string" && row.CurrentDirectory
+      ? path.resolve(row.CurrentDirectory)
+      : undefined,
+    command: typeof row.CommandLine === "string" ? row.CommandLine : undefined,
+    startedAt: typeof row.CreationDate === "string" ? row.CreationDate : undefined,
+    tty: "none",
+  };
+}
+
+async function windowsProcess(pid: number): Promise<ProcessSummary | undefined> {
+  const [row] = await windowsProcessRows(pid);
+  return row ? windowsProcessSummary(row) : undefined;
 }
 
 async function posixProcess(pid: number): Promise<ProcessSummary | undefined> {
@@ -105,16 +320,8 @@ export async function processGroupMembers(
   processGroupId: number,
 ): Promise<readonly ProcessSummary[]> {
   if (process.platform === "win32") {
-    const output = (await outputOrEmpty("powershell.exe", [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine,CreationDate | ConvertTo-Json -Compress",
-    ])).trim();
-    if (!output) return [];
+    const rows = await windowsProcessRows(processGroupId, true);
     try {
-      const raw = JSON.parse(output) as Record<string, unknown> | readonly Record<string, unknown>[];
-      const rows = Array.isArray(raw) ? raw : [raw];
       const memberIds = new Set<number>([processGroupId]);
       let changed = true;
       while (changed) {
@@ -129,16 +336,8 @@ export async function processGroupMembers(
         }
       }
       return rows.flatMap((row): ProcessSummary[] => {
-        const pid = Number(row.ProcessId);
-        if (!memberIds.has(pid)) return [];
-        return [{
-          pid,
-          parentPid: Number(row.ParentProcessId) || undefined,
-          processGroupId: pid,
-          command: typeof row.CommandLine === "string" ? row.CommandLine : undefined,
-          startedAt: typeof row.CreationDate === "string" ? row.CreationDate : undefined,
-          tty: "none",
-        }];
+        const summary = windowsProcessSummary(row);
+        return summary && memberIds.has(summary.pid) ? [summary] : [];
       });
     } catch {
       return [];

@@ -1,6 +1,13 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import { describe, expect, it } from "vitest";
 import type { ProcessSummary } from "../shared/contracts.js";
-import { sameProcessIdentity } from "./processDiscovery.js";
+import {
+  describeProcess,
+  isPathInside,
+  processGroupMembers,
+  sameProcessIdentity,
+} from "./processDiscovery.js";
 
 const identity: ProcessSummary = {
   pid: 4101,
@@ -25,4 +32,29 @@ describe("sameProcessIdentity", () => {
     expect(sameProcessIdentity(identity, { ...identity, command: "node other.js" })).toBe(false);
     expect(sameProcessIdentity({ ...identity, startedAt: undefined }, identity)).toBe(false);
   });
+});
+
+describe.runIf(process.platform === "win32")("Windows process discovery", () => {
+  it("为单进程与进程组成员读取实际 cwd", async () => {
+    let child: ChildProcess | undefined;
+    try {
+      child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30_000)"], {
+        cwd: process.cwd(),
+        stdio: "ignore",
+      });
+      await once(child, "spawn");
+      expect(child.pid).toBeTypeOf("number");
+
+      const summary = await describeProcess(child.pid!);
+      expect(summary).toBeDefined();
+      expect(isPathInside(summary?.cwd, process.cwd())).toBe(true);
+
+      const members = await processGroupMembers(child.pid!);
+      const root = members.find((item) => item.pid === child!.pid);
+      expect(root).toBeDefined();
+      expect(isPathInside(root?.cwd, process.cwd())).toBe(true);
+    } finally {
+      child?.kill("SIGTERM");
+    }
+  }, 15_000);
 });

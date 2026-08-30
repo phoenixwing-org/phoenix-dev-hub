@@ -118,7 +118,11 @@ describe("PdhBuiltinServiceConfigStore", () => {
 
     const configPath = path.join(root, ".runtime/services.json");
     expect(existsSync(configPath)).toBe(true);
-    expect(statSync(configPath).mode & 0o777).toBe(0o600);
+    const configStat = statSync(configPath);
+    expect(configStat.isFile()).toBe(true);
+    if (process.platform !== "win32") {
+      expect(configStat.mode & 0o777).toBe(0o600);
+    }
     expect(JSON.parse(readFileSync(configPath, "utf8"))).toMatchObject({
       version: 3,
       removed: [],

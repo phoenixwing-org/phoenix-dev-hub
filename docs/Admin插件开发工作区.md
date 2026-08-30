@@ -22,7 +22,7 @@ Admin 插件开发工作区是 Phoenix Admin Host 的本机定制开发能力，
 - `manifest.json` 相对产品根目录的路径；
 - 创建时间。
 
-仓库提供 [`config/admin-plugins.sample.json`](../config/admin-plugins.sample.json)。复制为
+仓库提供 [`config/sample/admin-plugins.sample.json`](../config/sample/admin-plugins.sample.json)。复制为
 `.runtime/admin-plugins.json` 后，相对路径以 Hub 根目录解析，便于同级 Phoenix 工作区直接参考；
 不存在的示例插件应删除。该文件只建立登记，不创建 symlink。sample 保留空的 `operations: {}`
 说明运行时节点；操作记录与链接状态由 Hub 在用户显式执行“开发挂载 / 开发卸载 / 修改目录”后

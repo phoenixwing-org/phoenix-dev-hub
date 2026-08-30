@@ -237,7 +237,7 @@ export function assertServicesStopped(statuses, serviceIds) {
 }
 
 async function readHubServices(profile) {
-  const hubUrl = new URL(process.env.PHOENIX_DEV_HUB_URL ?? defaultHubUrl);
+  const hubUrl = new URL(process.env.PHOENIX_HUB_URL ?? defaultHubUrl);
   if (!loopbackHosts.has(hubUrl.hostname) || !["http:", "https:"].includes(hubUrl.protocol)) {
     fail("Hub URL 必须是本机 HTTP(S) 地址");
   }

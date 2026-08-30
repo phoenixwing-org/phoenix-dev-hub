@@ -6,7 +6,7 @@ const SENSITIVE_KEY_VALUE = new RegExp(
   "gi",
 );
 
-export function pdhSanitizeServiceLogText(text: string): string {
+export function pnhSanitizeServiceLogText(text: string): string {
   return text
     .replace(/(\bAuthorization\s*[:=]\s*)(Bearer|Basic)\s+\S+/gi, "$1$2 [REDACTED]")
     .replace(/(\bAuthorization\s*[:=]\s*)(?!Bearer\b|Basic\b)\S+/gi, "$1[REDACTED]")
@@ -96,7 +96,7 @@ export class ServiceLogBuffer {
       sequence: this.#sequence++,
       timestamp: new Date().toISOString(),
       stream,
-      text: pdhSanitizeServiceLogText(text),
+      text: pnhSanitizeServiceLogText(text),
     });
     this.#totalWritten += 1;
     if (this.#entries.length > this.capacity) {

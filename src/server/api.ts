@@ -10,17 +10,17 @@ import type {
   AdminPluginVerificationBoundary,
   AdminPluginVerifyResponse,
   ApiErrorResponse,
-  DevHubConfigurationDocument,
+  HubConfigurationDocument,
   HubRuntimeInfo,
   ServiceDefinition,
   StopServiceRequest,
   UpdateLocalProjectRequest,
 } from "../shared/contracts.js";
-import { DevHubError } from "./errors.js";
-import type { PdhBuiltinServiceConfigStore } from "./PdhBuiltinServiceConfig.js";
-import type { PdhAdminPluginWorkspace } from "./PdhAdminPluginWorkspace.js";
-import type { PdhProjectConfigStore } from "./PdhProjectConfig.js";
-import type { PdhServiceManager } from "./PdhServiceManager.js";
+import { HubError } from "./errors.js";
+import type { PnhBuiltinServiceConfigStore } from "./PnhBuiltinServiceConfig.js";
+import type { PnhAdminPluginWorkspace } from "./PnhAdminPluginWorkspace.js";
+import type { PnhProjectConfigStore } from "./PnhProjectConfig.js";
+import type { PnhServiceManager } from "./PnhServiceManager.js";
 
 const LOOPBACK_HOST_PATTERN = /^(127\.0\.0\.1|localhost)(:\d+)?$/i;
 const ADMIN_PLUGIN_MIGRATION_SKILL_COMMIT = "46e25e3041dc9a57dbbb629feedc9e4694dfcd82";
@@ -41,7 +41,7 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     total += buffer.length;
-    if (total > 256 * 1024) throw new DevHubError("BODY_TOO_LARGE", "请求体过大", 413);
+    if (total > 256 * 1024) throw new HubError("BODY_TOO_LARGE", "请求体过大", 413);
     chunks.push(buffer);
   }
   if (chunks.length === 0) return {};
@@ -50,24 +50,24 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
     return parsed as Record<string, unknown>;
   } catch {
-    throw new DevHubError("INVALID_JSON", "请求体必须是 JSON 对象", 400);
+    throw new HubError("INVALID_JSON", "请求体必须是 JSON 对象", 400);
   }
 }
 
 function assertLocalRequest(request: IncomingMessage): void {
   const host = request.headers.host ?? "";
   if (!LOOPBACK_HOST_PATTERN.test(host)) {
-    throw new DevHubError("LOCAL_ONLY", "Dev Hub 仅接受本机 Host", 403);
+    throw new HubError("LOCAL_ONLY", "Hub 仅接受本机 Host", 403);
   }
   if (request.method === "GET" || request.method === "HEAD") return;
   const origin = request.headers.origin;
   if (origin && origin !== `http://${host}`) {
-    throw new DevHubError("INVALID_ORIGIN", "拒绝非同源控制请求", 403);
+    throw new HubError("INVALID_ORIGIN", "拒绝非同源控制请求", 403);
   }
 }
 
 function errorResponse(error: unknown): { statusCode: number; body: ApiErrorResponse } {
-  if (error instanceof DevHubError) {
+  if (error instanceof HubError) {
     return {
       statusCode: error.statusCode,
       body: { error: error.message, code: error.code, details: error.details },
@@ -88,7 +88,7 @@ function portableServiceDefinition(definition: ServiceDefinition): ServiceDefini
 }
 
 function assertBuiltinDefinitionsMutable(
-  manager: PdhServiceManager,
+  manager: PnhServiceManager,
   serviceIds: readonly string[],
 ): void {
   const registered = manager.serviceIds();
@@ -98,7 +98,7 @@ function assertBuiltinDefinitionsMutable(
 }
 
 function synchronizeBuiltinDefinitions(
-  manager: PdhServiceManager,
+  manager: PnhServiceManager,
   previousIds: readonly string[],
   definitions: readonly ServiceDefinition[],
 ): void {
@@ -107,7 +107,7 @@ function synchronizeBuiltinDefinitions(
   const registeredBefore = manager.serviceIds();
   for (const definition of definitions) {
     if (registeredBefore.has(definition.id) && !previous.has(definition.id)) {
-      throw new DevHubError(
+      throw new HubError(
         "SERVICE_ID_CONFLICT",
         `新 Profile 的服务 ID 已被其他配置使用：${definition.id}`,
         409,
@@ -124,22 +124,22 @@ function synchronizeBuiltinDefinitions(
 }
 
 function requireAdminPluginWorkspace(
-  workspace: PdhAdminPluginWorkspace | undefined,
-): PdhAdminPluginWorkspace {
-  if (!workspace) throw new DevHubError("ADMIN_PLUGIN_WORKSPACE_UNAVAILABLE", "Admin 插件工作区尚未启用", 503);
+  workspace: PnhAdminPluginWorkspace | undefined,
+): PnhAdminPluginWorkspace {
+  if (!workspace) throw new HubError("ADMIN_PLUGIN_WORKSPACE_UNAVAILABLE", "Admin 插件工作区尚未启用", 503);
   return workspace;
 }
 
-export interface PdhHubControl {
+export interface PnhHubControl {
   readonly projectRoot: string;
   readonly version: string;
   readonly address: string;
   readonly requestShutdown: () => void;
 }
 
-function serviceLoopbackBase(manager: PdhServiceManager, serviceId: string): string {
+function serviceLoopbackBase(manager: PnhServiceManager, serviceId: string): string {
   const endpoint = manager.definition(serviceId).endpoints[0];
-  if (!endpoint) throw new DevHubError("ADMIN_HOST_ENDPOINT_MISSING", `服务 ${serviceId} 没有端点配置`, 409);
+  if (!endpoint) throw new HubError("ADMIN_HOST_ENDPOINT_MISSING", `服务 ${serviceId} 没有端点配置`, 409);
   return `http://127.0.0.1:${endpoint.port}`;
 }
 
@@ -171,8 +171,8 @@ function unrecordedGateOwner(
   };
 }
 
-/** 装配核验边界：诚实记录尚未由 Dev Hub 运行的工程门禁，不猜测产品完成度。 */
-export function pdhAdminPluginVerificationBoundary(
+/** 装配核验边界：诚实记录尚未由 Hub 运行的工程门禁，不猜测产品完成度。 */
+export function pnhAdminPluginVerificationBoundary(
   catalog: AdminPluginCatalogResponse,
 ): AdminPluginVerificationBoundary {
   return {
@@ -217,7 +217,7 @@ async function adminApiJson(
       },
     });
   } catch (error) {
-    throw new DevHubError(
+    throw new HubError(
       "ADMIN_HOST_UNREACHABLE",
       `Admin API 不可达：${error instanceof Error ? error.message : String(error)}`,
       409,
@@ -227,12 +227,12 @@ async function adminApiJson(
   let body: unknown = raw;
   try { body = JSON.parse(raw) as unknown; } catch { /* error response may be plain text */ }
   if (!response.ok) {
-    throw new DevHubError("ADMIN_HOST_REQUEST_FAILED", `Admin API 返回 HTTP ${response.status}`, 409, body);
+    throw new HubError("ADMIN_HOST_REQUEST_FAILED", `Admin API 返回 HTTP ${response.status}`, 409, body);
   }
   if (body && typeof body === "object" && "code" in body) {
     const envelope = body as { code?: number; message?: string; data?: unknown };
     if (envelope.code !== undefined && envelope.code !== 1000 && envelope.code !== 0) {
-      throw new DevHubError(
+      throw new HubError(
         "ADMIN_HOST_REQUEST_FAILED",
         envelope.message || `Admin API 业务错误：${envelope.code}`,
         409,
@@ -266,11 +266,11 @@ async function routeCheck(base: string, routePath: string): Promise<AdminPluginR
 }
 
 export function createApiHandler(
-  manager: PdhServiceManager,
-  projectConfig: PdhProjectConfigStore,
-  builtinServiceConfig: PdhBuiltinServiceConfigStore,
-  adminPluginWorkspace?: PdhAdminPluginWorkspace,
-  hubControl?: PdhHubControl,
+  manager: PnhServiceManager,
+  projectConfig: PnhProjectConfigStore,
+  builtinServiceConfig: PnhBuiltinServiceConfigStore,
+  adminPluginWorkspace?: PnhAdminPluginWorkspace,
+  hubControl?: PnhHubControl,
 ) {
   return async (request: IncomingMessage, response: ServerResponse): Promise<boolean> => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -279,7 +279,7 @@ export function createApiHandler(
     try {
       assertLocalRequest(request);
       if (request.method === "GET" && url.pathname === "/api/health") {
-        json(response, 200, { ok: true, service: "phoenix-dev-hub" });
+        json(response, 200, { ok: true, service: "phoenix-hub" });
         return true;
       }
       if (request.method === "GET" && url.pathname === "/api/services") {
@@ -291,9 +291,9 @@ export function createApiHandler(
         return true;
       }
       if (request.method === "GET" && url.pathname === "/api/hub") {
-        if (!hubControl) throw new DevHubError("HUB_CONTROL_UNAVAILABLE", "Hub 生命周期控制尚未启用", 503);
+        if (!hubControl) throw new HubError("HUB_CONTROL_UNAVAILABLE", "Hub 生命周期控制尚未启用", 503);
         const body: HubRuntimeInfo = {
-          name: "Phoenix Dev Hub",
+          name: "Phoenix Hub",
           version: hubControl.version,
           address: hubControl.address,
           projectRoot: hubControl.projectRoot,
@@ -306,19 +306,19 @@ export function createApiHandler(
       }
       if (request.method === "POST" && url.pathname === "/api/hub/terminal") {
         await readJson(request);
-        if (!hubControl) throw new DevHubError("HUB_CONTROL_UNAVAILABLE", "Hub 生命周期控制尚未启用", 503);
+        if (!hubControl) throw new HubError("HUB_CONTROL_UNAVAILABLE", "Hub 生命周期控制尚未启用", 503);
         json(response, 200, await manager.openHubTerminal(hubControl.projectRoot));
         return true;
       }
       if (request.method === "POST" && url.pathname === "/api/hub/shutdown") {
         const body = await readJson(request);
-        if (!hubControl) throw new DevHubError("HUB_CONTROL_UNAVAILABLE", "Hub 生命周期控制尚未启用", 503);
-        if (body.confirm !== "shutdown-phoenix-dev-hub") {
-          throw new DevHubError("HUB_SHUTDOWN_CONFIRMATION_REQUIRED", "关闭 Hub 需要明确二次确认", 409);
+        if (!hubControl) throw new HubError("HUB_CONTROL_UNAVAILABLE", "Hub 生命周期控制尚未启用", 503);
+        if (body.confirm !== "shutdown-phoenix-hub") {
+          throw new HubError("HUB_SHUTDOWN_CONFIRMATION_REQUIRED", "关闭 Hub 需要明确二次确认", 409);
         }
         json(response, 202, {
           accepted: true,
-          message: "正在安全停止 Hub-owned 服务并关闭 Phoenix Dev Hub",
+          message: "正在安全停止 Hub-owned 服务并关闭 Phoenix Hub",
         });
         setTimeout(hubControl.requestShutdown, 50).unref();
         return true;
@@ -417,7 +417,7 @@ export function createApiHandler(
           host: { api: apiStatus, web: webStatus },
           plugins,
           ddlPolicy: "Hub 只读取 Admin Node 生成的短时 dry-run；不执行 SQL、不接收 planId/备份证明，也不启用 synchronize。",
-          verificationBoundary: pdhAdminPluginVerificationBoundary(catalog),
+          verificationBoundary: pnhAdminPluginVerificationBoundary(catalog),
         };
         json(response, 200, result);
         return true;
@@ -425,17 +425,17 @@ export function createApiHandler(
 
       const adminPluginDryRunMatch = /^\/api\/admin-plugins\/([a-z][a-z0-9-]{1,63})\/ddl-dry-run$/.exec(url.pathname);
       if (adminPluginDryRunMatch) {
-        if (request.method !== "POST") throw new DevHubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
+        if (request.method !== "POST") throw new HubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
         const body = await readJson(request);
         const authorization = authorizationHeader(body.authorization);
-        if (!authorization) throw new DevHubError("ADMIN_TOKEN_REQUIRED", "DDL dry-run 需要一次性 Admin 访问令牌；Hub 不会保存令牌", 400);
+        if (!authorization) throw new HubError("ADMIN_TOKEN_REQUIRED", "DDL dry-run 需要一次性 Admin 访问令牌；Hub 不会保存令牌", 400);
         const workspace = requireAdminPluginWorkspace(adminPluginWorkspace);
         const plugin = workspace.status(adminPluginDryRunMatch[1]);
         if (!plugin.candidate) {
-          throw new DevHubError("ADMIN_PLUGIN_SOURCE_UNAVAILABLE", "插件源目录不可用，不能请求 DDL dry-run", 409, plugin.sourceError);
+          throw new HubError("ADMIN_PLUGIN_SOURCE_UNAVAILABLE", "插件源目录不可用，不能请求 DDL dry-run", 409, plugin.sourceError);
         }
         if (plugin.candidate.manifest.migrations.length === 0) {
-          throw new DevHubError("ADMIN_PLUGIN_HAS_NO_DDL", "该插件没有声明 DDL migration", 409);
+          throw new HubError("ADMIN_PLUGIN_HAS_NO_DDL", "该插件没有声明 DDL migration", 409);
         }
         const apiBase = serviceLoopbackBase(manager, workspace.settings().adminApiServiceId);
         const endpoint = `${apiBase}/admin/phoenix/plugin/migration-plan?moduleId=${encodeURIComponent(plugin.candidate.manifest.moduleId)}`;
@@ -459,20 +459,23 @@ export function createApiHandler(
           const body = await readJson(request);
           json(response, 200, workspace.repoint(pluginId, String(body.directory ?? "")));
         } else if (request.method === "DELETE" && !action) {
-          await readJson(request);
-          json(response, 200, { removed: true, plugin: workspace.remove(pluginId) });
+          const body = await readJson(request);
+          json(response, 200, {
+            removed: true,
+            plugin: workspace.remove(pluginId, typeof body.confirm === "string" ? body.confirm : undefined),
+          });
         } else if (request.method === "POST" && action === "mount") {
           await readJson(request);
           json(response, 200, workspace.mount(pluginId));
         } else if (request.method === "POST" && action === "unmount") {
           await readJson(request);
           json(response, 200, workspace.unmount(pluginId));
-        } else throw new DevHubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
+        } else throw new HubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
         return true;
       }
       if (request.method === "GET" && url.pathname === "/api/config/export") {
-        const body: DevHubConfigurationDocument = {
-          format: "phoenix-dev-hub-config",
+        const body: HubConfigurationDocument = {
+          format: "phoenix-hub-config",
           version: 2,
           series: builtinServiceConfig.sourceDocument().series,
           hiddenServiceIds: builtinServiceConfig.hiddenServiceIds(),
@@ -483,10 +486,10 @@ export function createApiHandler(
       }
       if (request.method === "POST" && url.pathname === "/api/config/import") {
         const body = await readJson(request);
-        if (body.format !== "phoenix-dev-hub-config" || !Array.isArray(body.projects)) {
-          throw new DevHubError(
+        if (body.format !== "phoenix-hub-config" || !Array.isArray(body.projects)) {
+          throw new HubError(
             "INVALID_CONFIG_IMPORT",
-            "导入配置必须使用 phoenix-dev-hub-config version=1 或 version=2 格式",
+            "导入配置必须使用 phoenix-hub-config version=1 或 version=2 格式",
             400,
           );
         }
@@ -495,7 +498,7 @@ export function createApiHandler(
           && Array.isArray(body.series)
           && Array.isArray(body.hiddenServiceIds);
         if (!version1 && !version2) {
-          throw new DevHubError("INVALID_CONFIG_IMPORT", "配置版本或字段不完整", 400);
+          throw new HubError("INVALID_CONFIG_IMPORT", "配置版本或字段不完整", 400);
         }
         const previousBuiltinIds = builtinServiceConfig.effectiveDefinitions().map((definition) => definition.id);
         const builtinPlan = version1
@@ -508,7 +511,7 @@ export function createApiHandler(
             )
           : undefined;
         const projectPlan = projectConfig.prepareImport({
-          format: "phoenix-dev-hub-projects",
+          format: "phoenix-hub-projects",
           version: 1,
           projects: body.projects,
         }, manager.serviceIds());
@@ -553,7 +556,7 @@ export function createApiHandler(
       const builtinSeriesMatch = /^\/api\/service-series\/([a-z][a-z0-9-]{1,63})$/.exec(url.pathname);
       if (builtinSeriesMatch) {
         if (request.method !== "PATCH") {
-          throw new DevHubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
+          throw new HubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
         }
         const seriesId = builtinSeriesMatch[1];
         const previous = builtinServiceConfig.effectiveDefinitions();
@@ -585,7 +588,7 @@ export function createApiHandler(
           return true;
         }
         if (request.method === "DELETE") {
-          if (!registered) throw new DevHubError("BUILTIN_SERVICE_REMOVED", "该默认服务已隐藏", 409);
+          if (!registered) throw new HubError("BUILTIN_SERVICE_REMOVED", "该默认服务已隐藏", 409);
           manager.assertDefinitionMutable(serviceId);
           builtinServiceConfig.remove(serviceId);
           manager.unregister(serviceId);
@@ -595,14 +598,14 @@ export function createApiHandler(
         if (request.method === "POST") {
           await readJson(request);
           if (registered) {
-            throw new DevHubError("BUILTIN_SERVICE_NOT_REMOVED", "该默认服务当前未隐藏", 409);
+            throw new HubError("BUILTIN_SERVICE_NOT_REMOVED", "该默认服务当前未隐藏", 409);
           }
           const definition = builtinServiceConfig.restore(serviceId);
           manager.register(definition);
           json(response, 200, await manager.status(serviceId));
           return true;
         }
-        throw new DevHubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
+        throw new HubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
       }
       if (request.method === "GET" && url.pathname === "/api/projects/export") {
         json(response, 200, projectConfig.exportDocument());
@@ -653,7 +656,7 @@ export function createApiHandler(
       if (projectMatch) {
         const projectId = projectMatch[1];
         const project = projectConfig.listProjects().find((item) => item.id === projectId);
-        if (!project) throw new DevHubError("PROJECT_NOT_FOUND", `未知本机项目：${projectId}`, 404);
+        if (!project) throw new HubError("PROJECT_NOT_FOUND", `未知本机项目：${projectId}`, 404);
         if (request.method === "PATCH") {
           const body = await readJson(request) as unknown as UpdateLocalProjectRequest;
           manager.assertDefinitionMutable(project.serviceId);
@@ -677,7 +680,7 @@ export function createApiHandler(
           json(response, 200, { removed: true, project: removed });
           return true;
         }
-        throw new DevHubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
+        throw new HubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
       }
 
       const clearLogsMatch = /^\/api\/services\/([a-z][a-z0-9-]{1,63})\/logs\/clear$/.exec(
@@ -685,7 +688,7 @@ export function createApiHandler(
       );
       if (clearLogsMatch) {
         if (request.method !== "POST") {
-          throw new DevHubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
+          throw new HubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
         }
         await readJson(request);
         json(response, 200, await manager.clearLogs(clearLogsMatch[1]));
@@ -695,7 +698,7 @@ export function createApiHandler(
       const match = /^\/api\/services\/([a-z][a-z0-9-]{1,63})(?:\/(start|stop|restart|logs|terminal|database))?$/.exec(
         url.pathname,
       );
-      if (!match) throw new DevHubError("API_NOT_FOUND", "API 路径不存在", 404);
+      if (!match) throw new HubError("API_NOT_FOUND", "API 路径不存在", 404);
       const [, serviceId, action] = match;
       if (request.method === "GET" && !action) {
         json(response, 200, await manager.status(serviceId));
@@ -729,7 +732,7 @@ export function createApiHandler(
         await readJson(request);
         json(response, 200, await manager.openSystemTerminal(serviceId));
       } else {
-        throw new DevHubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
+        throw new HubError("METHOD_NOT_ALLOWED", "请求方法不支持", 405);
       }
       return true;
     } catch (error) {

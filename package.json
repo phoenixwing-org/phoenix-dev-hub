@@ -1,18 +1,19 @@
 {
-  "name": "phoenix-dev-hub",
-  "version": "0.4.2",
+  "name": "phoenix-hub",
+  "version": "0.5.0",
   "private": true,
   "description": "Phoenix 本机开发服务的受控启动、停止、探测与日志工作台",
   "repository": {
     "type": "git",
-    "url": "https://gitee.com/phoenixwing/phoenix-dev-hub.git"
+    "url": "https://gitee.com/phoenixwing/phoenix-hub.git"
   },
   "type": "module",
   "packageManager": "pnpm@10.15.1",
   "license": "Apache-2.0",
   "scripts": {
     "dev": "pnpm verify:wing && tsx watch src/server/main.ts",
-    "build": "pnpm verify:wing && vite build && tsc -p tsconfig.server.json",
+    "build": "pnpm verify:wing && vite build && pnpm clean:server && tsc -p tsconfig.server.json",
+    "clean:server": "node -e \"require('node:fs').rmSync('dist-server', { recursive: true, force: true })\"",
     "start": "node dist-server/server/main.js",
     "typecheck": "pnpm verify:wing && vue-tsc -p tsconfig.app.json --noEmit --pretty false && tsc -p tsconfig.server.json --noEmit --pretty false",
     "test": "pnpm verify:wing && vitest run",

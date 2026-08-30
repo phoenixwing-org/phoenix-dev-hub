@@ -2,7 +2,7 @@
 
 状态：实现完成，等待用户真实页面点检
 
-范围：只更新 Phoenix Dev Hub 的本机开发装配登记、Admin Vue/Node 开发 symlink 与对应
+范围：只更新 Phoenix Hub 的本机开发装配登记、Admin Vue/Node 开发 symlink 与对应
 `.git/info/exclude` marker。明确不执行 Pah register/install/enable、DDL、数据库或权限改动。
 
 ## 安全边界

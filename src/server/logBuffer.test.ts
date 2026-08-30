@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pdhSanitizeServiceLogText, ServiceLogBuffer } from "./logBuffer.js";
+import { pnhSanitizeServiceLogText, ServiceLogBuffer } from "./logBuffer.js";
 
 describe("ServiceLogBuffer", () => {
   it("按行合并数据块并保留递增序号", () => {
@@ -66,10 +66,10 @@ describe("ServiceLogBuffer", () => {
   });
 
   it("可独立清洗 JSON 和普通 key-value 日志", () => {
-    expect(pdhSanitizeServiceLogText('{"refreshToken":"private","ok":true}')).toBe(
+    expect(pnhSanitizeServiceLogText('{"refreshToken":"private","ok":true}')).toBe(
       '{"refreshToken":"[REDACTED]","ok":true}',
     );
-    expect(pdhSanitizeServiceLogText("client_secret=private; phase=ready")).toBe(
+    expect(pnhSanitizeServiceLogText("client_secret=private; phase=ready")).toBe(
       "client_secret=[REDACTED]; phase=ready",
     );
   });

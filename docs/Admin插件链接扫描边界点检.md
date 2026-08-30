@@ -1,12 +1,12 @@
 # Admin 插件 symlink 扫描边界点检
 
 > 公共迁移 Skill 基线以执行任务时的受控版本为准；本文不绑定具体 commit。
-> 范围：仅调整 Phoenix Dev Hub 的装配核验契约、UI 与文档；不运行或修复产品门禁，不修改 Host/产品 Git。
+> 范围：仅调整 Phoenix Hub 的装配核验契约、UI 与文档；不运行或修复产品门禁，不修改 Host/产品 Git。
 
 ## 要求
 
 - [x] 完整读取新 Skill、迁移输入清单与验证审计模板。
-- [x] 确认 Dev Hub 工作树在任务开始前 clean。
+- [x] 确认 Hub 工作树在任务开始前 clean。
 - [x] 将“核验组合”改称“装配核验”，避免误报为完整 verify。
 - [x] API 明确返回 `completeProductVerification=false`。
 - [x] 分别列出 Host-owned 与 plugin-owned 的 lint/typecheck/test/build 门禁所有权。
@@ -21,8 +21,8 @@
 ## 产品阻断继承
 
 - Function/BOM 缺少 legacy 精确金样本时，不得报告迁移完成。
-- BOM dirty state、真实 403、Vue 浏览器点检与产品 lint 仍由产品任务处理，Dev Hub 不跨仓修复。
-- Dev Hub 装配核验通过不等于产品 lint/typecheck/test/build 或冻结 production 装配通过。
+- BOM dirty state、真实 403、Vue 浏览器点检与产品 lint 仍由产品任务处理，Hub 不跨仓修复。
+- Hub 装配核验通过不等于产品 lint/typecheck/test/build 或冻结 production 装配通过。
 
 ## 用户点检
 
@@ -34,7 +34,7 @@
 
 ## 结果
 
-- Dev Hub 完整门禁：11 个测试文件、42 项测试，类型检查与生产构建通过。
+- Hub 完整门禁：11 个测试文件、42 项测试，类型检查与生产构建通过。
 - 浏览器点检：装配核验按钮、非完整 verify 标题、所有权分组、未记录阻断与 Git exclude 边界均显示正常。
 - 最终提交：见 0.3.0 单一发布提交。
 - 用户反馈：待填写。

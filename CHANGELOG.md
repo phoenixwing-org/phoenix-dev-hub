@@ -1,5 +1,21 @@
 # 更新日志
 
+## 0.5.0 - 2026-08-31
+
+### 重构
+
+- 项目、包、服务标识与代码前缀由 Phoenix Dev Hub / `phoenix-dev-hub` / `Pdh` 统一为 Phoenix Hub / `phoenix-hub` / `Pnh`，不保留旧名称兼容入口。
+- 同步更新工作区、文档及跨仓受控测试契约，消除旧目录和旧环境变量消费者。
+
+### 改进
+
+- 非完整开发挂载状态的插件经明确确认后可以清理并移出列表；目标槽位上的正确、外来、悬空或异常 symlink 均可删除。
+- 清理过程始终保留实体目录和普通文件；来源不可用、旧登记缺少身份或 Git exclude 异常不再阻塞移除登记。
+
+### 验证
+
+- 增加失效登记、外来 symlink、旧格式登记和 API 确认令牌回归测试，并完成类型检查、完整测试与生产构建。
+
 ## 0.4.2 - 2026-08-28
 
 ### 改进
@@ -12,7 +28,7 @@
 
 ### 新增
 
-- 在“系统 → Dev Hub → Hub 设置”集中显示并编辑 Phoenix Admin 开发 Host：Admin Vue/Node Git 根目录，以及关联的 Web/API 服务 ID。
+- 在“系统 → Hub → Hub 设置”集中显示并编辑 Phoenix Admin 开发 Host：Admin Vue/Node Git 根目录，以及关联的 Web/API 服务 ID。
 - 增加 Host 设置的自动门禁和用户点检文档，明确开发挂载、服务配置与数据库初始化的职责边界。
 
 ### 改进
@@ -36,7 +52,7 @@
 
 ### 依赖
 
-- Dev Hub 自身的 Registry 依赖升级并锁定为 `phoenix-wing@0.7.1`。
+- Hub 自身的 Registry 依赖升级并锁定为 `phoenix-wing@0.7.1`。
 
 ## 0.3.2 - 2026-08-10
 
@@ -49,7 +65,7 @@
 
 ### 依赖
 
-- Dev Hub 自身的 Registry 依赖升级并锁定为 `phoenix-wing@0.6.3`。
+- Hub 自身的 Registry 依赖升级并锁定为 `phoenix-wing@0.6.3`。
 
 ## 0.3.1 - 2026-08-09
 

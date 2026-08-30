@@ -49,8 +49,8 @@ describe("services.json", () => {
     }
   });
 
-  it("配置文件整体损坏时返回可展示错误而不抛出 DevHubError", () => {
-    const root = mkdtempSync(path.join(os.tmpdir(), "pdh-config-invalid-json-"));
+  it("配置文件整体损坏时返回可展示错误而不抛出 HubError", () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "pnh-config-invalid-json-"));
     const configPath = path.join(root, "services.user.json");
     try {
       writeFileSync(configPath, "{ invalid json\n");
@@ -65,7 +65,7 @@ describe("services.json", () => {
   });
 
   it("启动加载保留路径失效的服务并返回可见配置错误，严格编辑校验仍拒绝", () => {
-    const root = mkdtempSync(path.join(os.tmpdir(), "pdh-config-missing-path-"));
+    const root = mkdtempSync(path.join(os.tmpdir(), "pnh-config-missing-path-"));
     const configPath = path.join(root, "services.user.json");
     const document = {
       version: 2,
@@ -104,7 +104,7 @@ describe("services.json", () => {
   });
 
   it("用户配置优先于旧配置且不会自动执行 sample", () => {
-    const root = mkdtempSync(path.join(os.tmpdir(), "pdh-config-path-"));
+    const root = mkdtempSync(path.join(os.tmpdir(), "pnh-config-path-"));
     const configRoot = path.join(root, "config");
     mkdirSync(configRoot);
     try {

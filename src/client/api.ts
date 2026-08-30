@@ -12,11 +12,11 @@ import type {
   BuiltinServiceConfigCatalogResponse,
   BuiltinServiceSeriesConfigEntry,
   DeleteLocalProjectResponse,
-  DevHubConfigurationDocument,
+  HubConfigurationDocument,
   HostCapabilitiesResponse,
   HubRuntimeInfo,
   ImportLocalProjectsResponse,
-  ImportDevHubConfigurationResponse,
+  ImportHubConfigurationResponse,
   LocalNodeProjectCandidate,
   LocalProjectCatalogResponse,
   LocalProjectTransferDocument,
@@ -60,7 +60,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export const devHubApi = {
+export const hubApi = {
   listServices: () => request<ServiceListResponse>("/api/services"),
   hostCapabilities: () => request<HostCapabilitiesResponse>("/api/host-capabilities"),
   hubInfo: () => request<HubRuntimeInfo>("/api/hub"),
@@ -70,7 +70,7 @@ export const devHubApi = {
   ),
   shutdownHub: () => request<ShutdownHubResponse>(
     "/api/hub/shutdown",
-    { method: "POST", body: JSON.stringify({ confirm: "shutdown-phoenix-dev-hub" }) },
+    { method: "POST", body: JSON.stringify({ confirm: "shutdown-phoenix-hub" }) },
   ),
   projectCatalog: () => request<LocalProjectCatalogResponse>("/api/projects"),
   builtinServiceConfig: () => request<BuiltinServiceConfigCatalogResponse>("/api/service-config"),
@@ -87,9 +87,14 @@ export const devHubApi = {
     `/api/admin-plugins/${pluginId}`,
     { method: "PATCH", body: JSON.stringify({ directory }) },
   ),
-  removeAdminPlugin: (pluginId: string) => request<{ removed: true }>(
+  removeAdminPlugin: (pluginId: string, forceNonMountedCleanup = false) => request<{ removed: true }>(
     `/api/admin-plugins/${pluginId}`,
-    { method: "DELETE", body: "{}" },
+    {
+      method: "DELETE",
+      body: JSON.stringify(forceNonMountedCleanup
+        ? { confirm: `cleanup-nonmounted:${pluginId}` }
+        : {}),
+    },
   ),
   mountAdminPlugin: (pluginId: string) => request<AdminPluginStatus>(
     `/api/admin-plugins/${pluginId}/mount`,
@@ -156,8 +161,8 @@ export const devHubApi = {
     "/api/service-config/reset",
     { method: "POST", body: "{}" },
   ),
-  exportConfiguration: () => request<DevHubConfigurationDocument>("/api/config/export"),
-  importConfiguration: (document: DevHubConfigurationDocument) => request<ImportDevHubConfigurationResponse>(
+  exportConfiguration: () => request<HubConfigurationDocument>("/api/config/export"),
+  importConfiguration: (document: HubConfigurationDocument) => request<ImportHubConfigurationResponse>(
     "/api/config/import",
     { method: "POST", body: JSON.stringify(document) },
   ),

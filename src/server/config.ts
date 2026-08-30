@@ -13,7 +13,7 @@ import type {
   ServiceSeriesSource,
   ServiceSourceDefinition,
 } from "../shared/contracts.js";
-import { DevHubError } from "./errors.js";
+import { HubError } from "./errors.js";
 
 const ID_PATTERN = /^[a-z][a-z0-9-]{1,63}$/;
 const ENV_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
@@ -44,13 +44,13 @@ const SERVICE_CONFIG_CANDIDATES = [
 
 function assertObject(value: unknown, label: string): asserts value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new DevHubError("INVALID_CONFIG", `${label} 必须是对象`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 必须是对象`, 500);
   }
 }
 
 function requiredString(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new DevHubError("INVALID_CONFIG", `${label} 必须是非空字符串`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 必须是非空字符串`, 500);
   }
   return value.trim();
 }
@@ -58,7 +58,7 @@ function requiredString(value: unknown, label: string): string {
 function requiredId(value: unknown, label: string): string {
   const id = requiredString(value, label);
   if (!ID_PATTERN.test(id)) {
-    throw new DevHubError("INVALID_CONFIG", `${label} 不合法：${id}`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 不合法：${id}`, 500);
   }
   return id;
 }
@@ -70,10 +70,10 @@ function resolveLoopbackUrl(value: unknown, label: string): string | undefined {
   try {
     url = new URL(raw);
   } catch {
-    throw new DevHubError("INVALID_CONFIG", `${label} 不是合法 URL`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 不是合法 URL`, 500);
   }
   if (!LOOPBACK_HOSTS.has(url.hostname) || !["http:", "https:"].includes(url.protocol)) {
-    throw new DevHubError("INVALID_CONFIG", `${label} 只能使用本机 HTTP(S) 地址`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 只能使用本机 HTTP(S) 地址`, 500);
   }
   return url.toString();
 }
@@ -83,10 +83,10 @@ function parseEndpoint(value: unknown, serviceId: string): ServiceEndpointDefini
   const id = requiredId(value.id, `服务 ${serviceId} endpoint.id`);
   const port = value.port;
   if (!Number.isInteger(port) || Number(port) < 1 || Number(port) > 65_535) {
-    throw new DevHubError("INVALID_CONFIG", `服务 ${serviceId}/${id} 端口不合法`, 500);
+    throw new HubError("INVALID_CONFIG", `服务 ${serviceId}/${id} 端口不合法`, 500);
   }
   if (value.required !== undefined && typeof value.required !== "boolean") {
-    throw new DevHubError("INVALID_CONFIG", `服务 ${serviceId}/${id} required 必须是布尔值`, 500);
+    throw new HubError("INVALID_CONFIG", `服务 ${serviceId}/${id} required 必须是布尔值`, 500);
   }
   return {
     id,
@@ -105,7 +105,7 @@ function parseIdentity(value: unknown, serviceId: string): ServiceIdentityDefini
   assertObject(value.expected, `服务 ${serviceId} identity.expected`);
   const entries = Object.entries(value.expected);
   if (entries.length === 0 || entries.some(([, expected]) => !["string", "number", "boolean"].includes(typeof expected))) {
-    throw new DevHubError(
+    throw new HubError(
       "INVALID_CONFIG",
       `服务 ${serviceId} identity.expected 必须包含字符串、数字或布尔字段`,
       500,
@@ -121,14 +121,14 @@ function parseCommand(value: unknown, serviceId: string): ServiceCommandDefiniti
   assertObject(value, `服务 ${serviceId} command`);
   const executable = requiredString(value.executable, `服务 ${serviceId} command.executable`);
   if (BLOCKED_EXECUTABLES.has(path.basename(executable).toLowerCase())) {
-    throw new DevHubError(
+    throw new HubError(
       "INVALID_CONFIG",
       `服务 ${serviceId} 不允许直接使用 shell 作为启动命令：${executable}`,
       500,
     );
   }
   if (!Array.isArray(value.args) || !value.args.every((item) => typeof item === "string")) {
-    throw new DevHubError("INVALID_CONFIG", `服务 ${serviceId} command.args 必须是字符串数组`, 500);
+    throw new HubError("INVALID_CONFIG", `服务 ${serviceId} command.args 必须是字符串数组`, 500);
   }
   const rawArgs = value.args as string[];
   const executableName = path.basename(executable).toLowerCase();
@@ -141,7 +141,7 @@ function parseCommand(value: unknown, serviceId: string): ServiceCommandDefiniti
     assertObject(value.env, `服务 ${serviceId} command.env`);
     const entries = Object.entries(value.env).map(([name, raw]) => {
       if (!ENV_NAME_PATTERN.test(name) || BLOCKED_ENV_NAMES.has(name) || typeof raw !== "string") {
-        throw new DevHubError("INVALID_CONFIG", `服务 ${serviceId} 环境变量不合法：${name}`, 500);
+        throw new HubError("INVALID_CONFIG", `服务 ${serviceId} 环境变量不合法：${name}`, 500);
       }
       return [name, raw] as const;
     });
@@ -160,17 +160,17 @@ export function parseServiceDefinition(
   const configuredCwd = requiredString(value.cwd, `服务 ${id} cwd`);
   const cwd = path.resolve(projectRoot, configuredCwd);
   if ((!existsSync(cwd) && !options.allowMissingCwd) || (existsSync(cwd) && !statSync(cwd).isDirectory())) {
-    throw new DevHubError("INVALID_CONFIG", `服务 ${id} 工作目录不存在：${cwd}`, 500);
+    throw new HubError("INVALID_CONFIG", `服务 ${id} 工作目录不存在：${cwd}`, 500);
   }
   if (!Array.isArray(value.endpoints) || value.endpoints.length === 0) {
-    throw new DevHubError("INVALID_CONFIG", `服务 ${id} 至少需要一个 endpoint`, 500);
+    throw new HubError("INVALID_CONFIG", `服务 ${id} 至少需要一个 endpoint`, 500);
   }
   const endpoints = value.endpoints.map((endpoint) => parseEndpoint(endpoint, id));
   const endpointIds = new Set<string>();
   const endpointPorts = new Set<number>();
   for (const endpoint of endpoints) {
     if (endpointIds.has(endpoint.id) || endpointPorts.has(endpoint.port)) {
-      throw new DevHubError("INVALID_CONFIG", `服务 ${id} endpoint ID 或端口重复`, 500);
+      throw new HubError("INVALID_CONFIG", `服务 ${id} endpoint ID 或端口重复`, 500);
     }
     endpointIds.add(endpoint.id);
     endpointPorts.add(endpoint.port);
@@ -178,12 +178,12 @@ export function parseServiceDefinition(
 
   const externalStop = value.externalStop ?? "deny";
   if (externalStop !== "deny" && externalStop !== "confirm-matching-cwd") {
-    throw new DevHubError("INVALID_CONFIG", `服务 ${id} externalStop 不合法`, 500);
+    throw new HubError("INVALID_CONFIG", `服务 ${id} externalStop 不合法`, 500);
   }
   const moduleId = requiredId(value.moduleId, `服务 ${id} moduleId`);
   const startOrder = value.startOrder === undefined ? 0 : Number(value.startOrder);
   if (!Number.isInteger(startOrder) || startOrder < -10_000 || startOrder > 10_000) {
-    throw new DevHubError("INVALID_CONFIG", `服务 ${id} startOrder 必须是整数`, 500);
+    throw new HubError("INVALID_CONFIG", `服务 ${id} startOrder 必须是整数`, 500);
   }
 
   return {
@@ -232,7 +232,7 @@ function parseMetadata(value: unknown, label: string): ServiceProfileMetadata | 
   assertObject(value, label);
   const entries = Object.entries(value);
   if (entries.some(([, item]) => typeof item !== "string")) {
-    throw new DevHubError("INVALID_CONFIG", `${label} 的值必须是字符串`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 的值必须是字符串`, 500);
   }
   return Object.fromEntries(entries) as ServiceProfileMetadata;
 }
@@ -247,12 +247,12 @@ function resolveExistingPath(
   const resolved = path.resolve(projectRoot, requiredString(value, label));
   if (!existsSync(resolved)) {
     if (options.tolerateUnavailablePaths) return resolved;
-    throw new DevHubError("INVALID_CONFIG", `${label} 不存在：${resolved}`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 不存在：${resolved}`, 500);
   }
   const stat = statSync(resolved);
   if ((kind === "file" && !stat.isFile()) || (kind === "directory" && !stat.isDirectory())) {
     if (options.tolerateUnavailablePaths) return resolved;
-    throw new DevHubError("INVALID_CONFIG", `${label} 必须是${kind === "file" ? "文件" : "目录"}：${resolved}`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 必须是${kind === "file" ? "文件" : "目录"}：${resolved}`, 500);
   }
   return resolved;
 }
@@ -260,7 +260,7 @@ function resolveExistingPath(
 function safeRelativeDirectory(value: unknown, label: string): string {
   const raw = requiredString(value, label).replaceAll("\\", "/");
   if (path.posix.isAbsolute(raw) || raw === "." || raw.split("/").some((part) => !part || part === "." || part === "..")) {
-    throw new DevHubError("INVALID_CONFIG", `${label} 必须是安全相对目录`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 必须是安全相对目录`, 500);
   }
   return raw;
 }
@@ -274,7 +274,7 @@ function parseGitInput(
   assertObject(value, label);
   const commit = requiredString(value.commit, `${label}.commit`);
   if (!/^[a-f0-9]{40}$/.test(commit)) {
-    throw new DevHubError("INVALID_CONFIG", `${label}.commit 必须是 40 位 Git commit`, 500);
+    throw new HubError("INVALID_CONFIG", `${label}.commit 必须是 40 位 Git commit`, 500);
   }
   return {
     root: resolveExistingPath(value.root, `${label}.root`, projectRoot, "directory", options),
@@ -288,7 +288,7 @@ function parseRegistryPackages(
   serviceRoles: ReadonlySet<string>,
 ): readonly ServiceProfileRegistryPackage[] {
   if (!Array.isArray(value) || value.length === 0) {
-    throw new DevHubError("INVALID_CONFIG", `${label} 至少需要一项 Registry 包`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 至少需要一项 Registry 包`, 500);
   }
   const identities = new Set<string>();
   return value.map((raw, index) => {
@@ -296,23 +296,23 @@ function parseRegistryPackages(
     assertObject(raw, itemLabel);
     const serviceRole = requiredId(raw.serviceRole, `${itemLabel}.serviceRole`);
     if (!serviceRoles.has(serviceRole)) {
-      throw new DevHubError("INVALID_CONFIG", `${itemLabel} 引用了未知 serviceRole：${serviceRole}`, 500);
+      throw new HubError("INVALID_CONFIG", `${itemLabel} 引用了未知 serviceRole：${serviceRole}`, 500);
     }
     const name = requiredString(raw.name, `${itemLabel}.name`);
     if (!/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(name)) {
-      throw new DevHubError("INVALID_CONFIG", `${itemLabel}.name 不是合法包名`, 500);
+      throw new HubError("INVALID_CONFIG", `${itemLabel}.name 不是合法包名`, 500);
     }
     const version = requiredString(raw.version, `${itemLabel}.version`);
     if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
-      throw new DevHubError("INVALID_CONFIG", `${itemLabel}.version 必须是精确版本`, 500);
+      throw new HubError("INVALID_CONFIG", `${itemLabel}.version 必须是精确版本`, 500);
     }
     const integrity = requiredString(raw.integrity, `${itemLabel}.integrity`);
     if (!/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(integrity)) {
-      throw new DevHubError("INVALID_CONFIG", `${itemLabel}.integrity 必须是 sha512 SRI`, 500);
+      throw new HubError("INVALID_CONFIG", `${itemLabel}.integrity 必须是 sha512 SRI`, 500);
     }
     const identity = `${serviceRole}:${name}`;
     if (identities.has(identity)) {
-      throw new DevHubError("INVALID_CONFIG", `${label} 包含重复包：${identity}`, 500);
+      throw new HubError("INVALID_CONFIG", `${label} 包含重复包：${identity}`, 500);
     }
     identities.add(identity);
     return { serviceRole, name, version, integrity };
@@ -329,52 +329,52 @@ function parseProfilePolicy(
   assertObject(value, label);
   const environmentKind = requiredString(value.environmentKind, `${label}.environmentKind`);
   if (!["development", "release-validation", "preproduction", "production"].includes(environmentKind)) {
-    throw new DevHubError("INVALID_CONFIG", `${label}.environmentKind 不合法：${environmentKind}`, 500);
+    throw new HubError("INVALID_CONFIG", `${label}.environmentKind 不合法：${environmentKind}`, 500);
   }
   const deploymentMode = requiredString(value.deploymentMode, `${label}.deploymentMode`);
   if (!["source-mounted", "package-assembled"].includes(deploymentMode)) {
-    throw new DevHubError("INVALID_CONFIG", `${label}.deploymentMode 不合法：${deploymentMode}`, 500);
+    throw new HubError("INVALID_CONFIG", `${label}.deploymentMode 不合法：${deploymentMode}`, 500);
   }
   if (environmentKind !== "development" && deploymentMode !== "package-assembled") {
-    throw new DevHubError("INVALID_CONFIG", `${label} 的 ${environmentKind} 禁止源码挂载`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 的 ${environmentKind} 禁止源码挂载`, 500);
   }
   const lifecycleControl = value.lifecycleControl === undefined
     ? environmentKind !== "production"
     : value.lifecycleControl;
   if (typeof lifecycleControl !== "boolean" || (environmentKind === "production" && lifecycleControl)) {
-    throw new DevHubError("INVALID_CONFIG", `${label} 的 production 生命周期必须为只读`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 的 production 生命周期必须为只读`, 500);
   }
   assertObject(value.database, `${label}.database`);
   const serviceRole = requiredId(value.database.serviceRole, `${label}.database.serviceRole`);
   if (!serviceRoles.has(serviceRole)) {
-    throw new DevHubError("INVALID_CONFIG", `${label}.database 引用了未知 serviceRole：${serviceRole}`, 500);
+    throw new HubError("INVALID_CONFIG", `${label}.database 引用了未知 serviceRole：${serviceRole}`, 500);
   }
   const envName = requiredString(value.database.envName, `${label}.database.envName`);
   if (!ENV_NAME_PATTERN.test(envName) || BLOCKED_ENV_NAMES.has(envName)) {
-    throw new DevHubError("INVALID_CONFIG", `${label}.database.envName 不合法`, 500);
+    throw new HubError("INVALID_CONFIG", `${label}.database.envName 不合法`, 500);
   }
   const databaseName = requiredString(value.database.name, `${label}.database.name`);
   if (!/^[a-z][a-z0-9_]{0,62}$/.test(databaseName)) {
-    throw new DevHubError("INVALID_CONFIG", `${label}.database.name 必须是安全 PostgreSQL 标识符`, 500);
+    throw new HubError("INVALID_CONFIG", `${label}.database.name 必须是安全 PostgreSQL 标识符`, 500);
   }
   const forbiddenNames = value.database.forbiddenNames === undefined
     ? []
     : value.database.forbiddenNames;
   if (!Array.isArray(forbiddenNames) || !forbiddenNames.every((item) => typeof item === "string" && /^[a-z][a-z0-9_]{0,62}$/.test(item))) {
-    throw new DevHubError("INVALID_CONFIG", `${label}.database.forbiddenNames 不合法`, 500);
+    throw new HubError("INVALID_CONFIG", `${label}.database.forbiddenNames 不合法`, 500);
   }
   if (forbiddenNames.includes(databaseName)) {
-    throw new DevHubError("INVALID_CONFIG", `${label} 数据库命中禁止名单：${databaseName}`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 数据库命中禁止名单：${databaseName}`, 500);
   }
   let databasePreflight: ServiceProfilePolicy["database"]["preflight"];
   if (value.database.preflight !== undefined) {
     assertObject(value.database.preflight, `${label}.database.preflight`);
     if (value.database.preflight.provider !== "postgresql") {
-      throw new DevHubError("INVALID_CONFIG", `${label}.database.preflight.provider 只接受 postgresql`, 500);
+      throw new HubError("INVALID_CONFIG", `${label}.database.preflight.provider 只接受 postgresql`, 500);
     }
     const host = requiredString(value.database.preflight.host, `${label}.database.preflight.host`);
     if (!LOOPBACK_HOSTS.has(host)) {
-      throw new DevHubError(
+      throw new HubError(
         "INVALID_CONFIG",
         `${label}.database.preflight.host 只允许本机 PostgreSQL，拒绝连接远程或生产数据库`,
         500,
@@ -382,14 +382,14 @@ function parseProfilePolicy(
     }
     const port = Number(value.database.preflight.port);
     if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-      throw new DevHubError("INVALID_CONFIG", `${label}.database.preflight.port 不合法`, 500);
+      throw new HubError("INVALID_CONFIG", `${label}.database.preflight.port 不合法`, 500);
     }
     const maintenanceDatabase = requiredString(
       value.database.preflight.maintenanceDatabase,
       `${label}.database.preflight.maintenanceDatabase`,
     );
     if (!/^[a-z][a-z0-9_]{0,62}$/.test(maintenanceDatabase) || maintenanceDatabase === databaseName) {
-      throw new DevHubError(
+      throw new HubError(
         "INVALID_CONFIG",
         `${label}.database.preflight.maintenanceDatabase 必须是独立的安全维护库`,
         500,
@@ -409,7 +409,7 @@ function parseProfilePolicy(
       || BLOCKED_ENV_NAMES.has(usernameEnv)
       || BLOCKED_ENV_NAMES.has(passwordEnv)
     ) {
-      throw new DevHubError("INVALID_CONFIG", `${label}.database.preflight 凭据环境变量名不合法`, 500);
+      throw new HubError("INVALID_CONFIG", `${label}.database.preflight 凭据环境变量名不合法`, 500);
     }
     const requiredRelations = value.database.preflight.requiredRelations;
     if (
@@ -419,7 +419,7 @@ function parseProfilePolicy(
       || !requiredRelations.every((item) => typeof item === "string" && /^[a-z][a-z0-9_]{0,62}$/.test(item))
       || new Set(requiredRelations).size !== requiredRelations.length
     ) {
-      throw new DevHubError(
+      throw new HubError(
         "INVALID_CONFIG",
         `${label}.database.preflight.requiredRelations 必须是非空、去重的安全 SQL 标识符白名单`,
         500,
@@ -427,7 +427,7 @@ function parseProfilePolicy(
     }
     const requiredRelationsStatus = value.database.preflight.requiredRelationsStatus;
     if (requiredRelationsStatus !== "provisional" && requiredRelationsStatus !== "versioned-manifest") {
-      throw new DevHubError(
+      throw new HubError(
         "INVALID_CONFIG",
         `${label}.database.preflight.requiredRelationsStatus 必须是 provisional 或 versioned-manifest`,
         500,
@@ -444,7 +444,7 @@ function parseProfilePolicy(
         || new Set(allowedDatabaseNames).size !== allowedDatabaseNames.length
         || !allowedDatabaseNames.includes(databaseName)
       ) {
-        throw new DevHubError(
+        throw new HubError(
           "INVALID_CONFIG",
           `${label}.database.preflight.creation 必须用精确 allowlist 授权当前验收数据库名`,
           500,
@@ -455,7 +455,7 @@ function parseProfilePolicy(
         `${label}.database.preflight.creation.cleanupResponsibility`,
       );
       if (cleanupResponsibility.length > 240) {
-        throw new DevHubError("INVALID_CONFIG", `${label}.database.preflight.creation.cleanupResponsibility 过长`, 500);
+        throw new HubError("INVALID_CONFIG", `${label}.database.preflight.creation.cleanupResponsibility 过长`, 500);
       }
       creation = { allowedDatabaseNames, cleanupResponsibility };
     }
@@ -472,7 +472,7 @@ function parseProfilePolicy(
     };
   }
   if (environmentKind === "release-validation" && !databasePreflight) {
-    throw new DevHubError(
+    throw new HubError(
       "INVALID_CONFIG",
       `${label} 的 release-validation 必须配置本机 PostgreSQL spawn 前 preflight`,
       500,
@@ -486,17 +486,17 @@ function parseProfilePolicy(
     const runtimeRoot = path.join(path.resolve(projectRoot), ".runtime");
     const relativeOutput = path.relative(runtimeRoot, outputRoot);
     if (!relativeOutput || relativeOutput.startsWith("..") || path.isAbsolute(relativeOutput)) {
-      throw new DevHubError("INVALID_CONFIG", `${label}.assembly.outputRoot 必须位于 Hub .runtime 的独立子目录`, 500);
+      throw new HubError("INVALID_CONFIG", `${label}.assembly.outputRoot 必须位于 Hub .runtime 的独立子目录`, 500);
     }
     assertObject(value.assembly.roleDirectories, `${label}.assembly.roleDirectories`);
     const roleDirectories = Object.fromEntries(Object.entries(value.assembly.roleDirectories).map(([role, directory]) => {
       const normalizedRole = requiredId(role, `${label}.assembly.roleDirectories role`);
       if (!serviceRoles.has(normalizedRole)) {
-        throw new DevHubError("INVALID_CONFIG", `${label}.assembly.roleDirectories 引用了未知 role：${normalizedRole}`, 500);
+        throw new HubError("INVALID_CONFIG", `${label}.assembly.roleDirectories 引用了未知 role：${normalizedRole}`, 500);
       }
       const normalizedDirectory = safeRelativeDirectory(directory, `${label}.assembly.roleDirectories.${normalizedRole}`);
       if (normalizedDirectory !== "node" && normalizedDirectory !== "vue") {
-        throw new DevHubError(
+        throw new HubError(
           "INVALID_CONFIG",
           `${label}.assembly.roleDirectories.${normalizedRole} 只允许映射到独立 node 或 vue Host 快照`,
           500,
@@ -506,23 +506,23 @@ function parseProfilePolicy(
     }));
     for (const role of serviceRoles) {
       if (!roleDirectories[role]) {
-        throw new DevHubError("INVALID_CONFIG", `${label}.assembly.roleDirectories 缺少 ${role}`, 500);
+        throw new HubError("INVALID_CONFIG", `${label}.assembly.roleDirectories 缺少 ${role}`, 500);
       }
     }
     const packageSha256 = requiredString(value.assembly.packageSha256, `${label}.assembly.packageSha256`);
     if (!/^[a-f0-9]{64}$/.test(packageSha256)) {
-      throw new DevHubError("INVALID_CONFIG", `${label}.assembly.packageSha256 必须是 SHA-256`, 500);
+      throw new HubError("INVALID_CONFIG", `${label}.assembly.packageSha256 必须是 SHA-256`, 500);
     }
     if (value.assembly.packageKind !== "pah-business-module") {
-      throw new DevHubError("INVALID_CONFIG", `${label}.assembly.packageKind 只接受 pah-business-module`, 500);
+      throw new HubError("INVALID_CONFIG", `${label}.assembly.packageKind 只接受 pah-business-module`, 500);
     }
     const moduleId = requiredId(value.assembly.moduleId, `${label}.assembly.moduleId`);
     const packageVersion = requiredString(value.assembly.version, `${label}.assembly.version`);
     if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$/.test(packageVersion)) {
-      throw new DevHubError("INVALID_CONFIG", `${label}.assembly.version 不合法`, 500);
+      throw new HubError("INVALID_CONFIG", `${label}.assembly.version 不合法`, 500);
     }
     if (value.assembly.installDependencies !== undefined && typeof value.assembly.installDependencies !== "boolean") {
-      throw new DevHubError("INVALID_CONFIG", `${label}.assembly.installDependencies 必须是布尔值`, 500);
+      throw new HubError("INVALID_CONFIG", `${label}.assembly.installDependencies 必须是布尔值`, 500);
     }
     const registryPackages = parseRegistryPackages(
       value.assembly.registryPackages,
@@ -530,7 +530,7 @@ function parseProfilePolicy(
       serviceRoles,
     );
     if (!registryPackages.some((item) => item.name === "phoenix-wing")) {
-      throw new DevHubError(
+      throw new HubError(
         "INVALID_CONFIG",
         `${label}.assembly.registryPackages 必须冻结 Registry phoenix-wing 的精确版本与 integrity`,
         500,
@@ -556,7 +556,7 @@ function parseProfilePolicy(
       installDependencies: value.assembly.installDependencies === true,
     };
   } else if (value.assembly !== undefined) {
-    throw new DevHubError("INVALID_CONFIG", `${label} 的 source-mounted 不允许 assembly`, 500);
+    throw new HubError("INVALID_CONFIG", `${label} 的 source-mounted 不允许 assembly`, 500);
   }
 
   return {
@@ -597,14 +597,14 @@ function normalizeSeries(
     ? undefined
     : requiredId(value.template.runtimeSlot, `series ${id}.template.runtimeSlot`);
   if (!Array.isArray(value.profiles) || value.profiles.length === 0) {
-    throw new DevHubError("INVALID_CONFIG", `series ${id} 至少需要一个 profile`, 500);
+    throw new HubError("INVALID_CONFIG", `series ${id} 至少需要一个 profile`, 500);
   }
   const profileIds = new Set<string>();
   const profiles = value.profiles.map((raw, profileIndex): ServiceProfileSource => {
     assertObject(raw, `series ${id}.profiles[${profileIndex}]`);
     const profileId = requiredId(raw.id, `series ${id}.profiles[${profileIndex}].id`);
     if (profileIds.has(profileId)) {
-      throw new DevHubError("INVALID_CONFIG", `series ${id} profile ID 重复：${profileId}`, 500);
+      throw new HubError("INVALID_CONFIG", `series ${id} profile ID 重复：${profileId}`, 500);
     }
     profileIds.add(profileId);
     assertObject(raw.services, `series ${id}/profile ${profileId}.services`);
@@ -655,7 +655,7 @@ export function resolveServiceConfiguration(
   for (const [seriesIndex, rawSeries] of source.series.entries()) {
     const series = normalizeSeries(rawSeries, seriesIndex, projectRoot, options);
     if (seriesIds.has(series.id)) {
-      throw new DevHubError("INVALID_CONFIG", `Series ID 重复：${series.id}`, 500);
+      throw new HubError("INVALID_CONFIG", `Series ID 重复：${series.id}`, 500);
     }
     seriesIds.add(series.id);
     for (const profile of series.profiles) {
@@ -700,7 +700,7 @@ export function resolveServiceConfiguration(
         if (profile.policy?.database.serviceRole === role) {
           const database = profile.policy.database;
           if (definition.command.env?.[database.envName] !== database.name) {
-            throw new DevHubError(
+            throw new HubError(
               "INVALID_CONFIG",
               `series ${series.id}/profile ${profile.id} 的 ${role} 必须显式固定 ${database.envName}=${database.name}`,
               500,
@@ -710,7 +710,7 @@ export function resolveServiceConfiguration(
             definition.command.env?.PAH_DB_SYNCHRONIZE !== "false"
             || definition.command.env?.PAH_DB_INITIALIZE !== "false"
           )) {
-            throw new DevHubError(
+            throw new HubError(
               "INVALID_CONFIG",
               `series ${series.id}/profile ${profile.id} 的发布装配必须关闭数据库 synchronize 与 initialize`,
               500,
@@ -718,7 +718,7 @@ export function resolveServiceConfiguration(
           }
         }
         if (serviceIds.has(definition.id)) {
-          throw new DevHubError("INVALID_CONFIG", `服务 ID 重复：${definition.id}`, 500);
+          throw new HubError("INVALID_CONFIG", `服务 ID 重复：${definition.id}`, 500);
         }
         serviceIds.add(definition.id);
         serviceCount += 1;
@@ -737,7 +737,7 @@ export function resolveServiceConfiguration(
         });
       }
       if (serviceCount === 0) {
-        throw new DevHubError("INVALID_CONFIG", `series ${series.id}/profile ${profile.id} 至少需要一个服务`, 500);
+        throw new HubError("INVALID_CONFIG", `series ${series.id}/profile ${profile.id} 至少需要一个服务`, 500);
       }
     }
   }
@@ -752,7 +752,7 @@ export function resolveServiceConfiguration(
       if (independent) {
         const sharedPort = left.endpoints.find((endpoint) => right.endpoints.some((candidate) => candidate.port === endpoint.port));
         if (sharedPort) {
-          throw new DevHubError(
+          throw new HubError(
             "INVALID_CONFIG",
             `${leftProfile} 与 ${rightProfile} 的并行端口冲突：${sharedPort.port}`,
             500,
@@ -761,7 +761,7 @@ export function resolveServiceConfiguration(
         const leftCwd = path.resolve(left.cwd);
         const rightCwd = path.resolve(right.cwd);
         if (leftCwd === rightCwd || leftCwd.startsWith(`${rightCwd}${path.sep}`) || rightCwd.startsWith(`${leftCwd}${path.sep}`)) {
-          throw new DevHubError(
+          throw new HubError(
             "INVALID_CONFIG",
             `${leftProfile} 与 ${rightProfile} 的并行工作目录冲突：${leftCwd} / ${rightCwd}`,
             500,
@@ -771,7 +771,7 @@ export function resolveServiceConfiguration(
       const leftPolicy = left.profilePolicy;
       const rightPolicy = right.profilePolicy;
       if (leftPolicy && rightPolicy && leftPolicy.database.name === rightPolicy.database.name) {
-        throw new DevHubError(
+        throw new HubError(
           "INVALID_CONFIG",
           `${leftProfile} 与 ${rightProfile} 的数据库冲突：${leftPolicy.database.name}`,
           500,
@@ -781,7 +781,7 @@ export function resolveServiceConfiguration(
         leftPolicy?.assembly?.outputRoot
         && leftPolicy.assembly.outputRoot === rightPolicy?.assembly?.outputRoot
       ) {
-        throw new DevHubError(
+        throw new HubError(
           "INVALID_CONFIG",
           `${leftProfile} 与 ${rightProfile} 的装配目录冲突：${leftPolicy.assembly.outputRoot}`,
           500,
@@ -891,7 +891,7 @@ export function parseServiceConfigurationDocument(
       series: value.series.map((series, index) => normalizeSeries(series, index, projectRoot, options)),
     };
   } else {
-    throw new DevHubError("INVALID_CONFIG", "services.json 必须使用 version=1 services 或 version=2 series", 500);
+    throw new HubError("INVALID_CONFIG", "services.json 必须使用 version=1 services 或 version=2 series", 500);
   }
   return { source, definitions: resolveServiceConfiguration(source, projectRoot, options) };
 }
@@ -903,13 +903,13 @@ export function resolveServiceConfigurationPath(
   if (explicitPath) {
     const resolved = path.resolve(projectRoot, explicitPath);
     if (existsSync(resolved)) return resolved;
-    throw new DevHubError("INVALID_CONFIG", `服务配置不存在：${resolved}`, 500);
+    throw new HubError("INVALID_CONFIG", `服务配置不存在：${resolved}`, 500);
   }
   for (const relativePath of SERVICE_CONFIG_CANDIDATES) {
     const candidate = path.join(projectRoot, relativePath);
     if (existsSync(candidate)) return candidate;
   }
-  throw new DevHubError(
+  throw new HubError(
     "INVALID_CONFIG",
     "未找到用户服务配置：请复制 config/sample/services.sample.json 为 config/services.user.json 并替换全部示例值",
     500,

@@ -14,21 +14,21 @@ import type {
   StopTargetDetails,
   SystemTerminalCapability,
 } from "@shared/contracts";
-import { ApiError, devHubApi } from "./api";
-import { pdhProfileDatabaseConfirmation } from "./PdhProfileDatabaseAction";
-import PdhLogPanel from "./components/PdhLogPanel.vue";
-import PdhAdminPluginPrimaryPanel from "./components/PdhAdminPluginPrimaryPanel.vue";
-import PdhAdminPluginView from "./components/PdhAdminPluginView.vue";
-import PdhHubSettingsView from "./components/PdhHubSettingsView.vue";
-import PdhPrimaryPanel from "./components/PdhPrimaryPanel.vue";
-import PdhProcessStopConfirmation from "./components/PdhProcessStopConfirmation.vue";
-import PdhServiceConfigView from "./components/PdhServiceConfigView.vue";
-import PdhServiceTable from "./components/PdhServiceTable.vue";
-import { pdhServiceDisplayName } from "./PdhServiceDisplayName";
-import { pdhServiceRibbonIcon } from "./PdhServiceRoleIcons";
-import { usePdhWorkbenchPreferencesStore } from "./stores/PdhWorkbenchPreferencesStore";
+import { ApiError, hubApi } from "./api";
+import { pnhProfileDatabaseConfirmation } from "./PnhProfileDatabaseAction";
+import PnhLogPanel from "./components/PnhLogPanel.vue";
+import PnhAdminPluginPrimaryPanel from "./components/PnhAdminPluginPrimaryPanel.vue";
+import PnhAdminPluginView from "./components/PnhAdminPluginView.vue";
+import PnhHubSettingsView from "./components/PnhHubSettingsView.vue";
+import PnhPrimaryPanel from "./components/PnhPrimaryPanel.vue";
+import PnhProcessStopConfirmation from "./components/PnhProcessStopConfirmation.vue";
+import PnhServiceConfigView from "./components/PnhServiceConfigView.vue";
+import PnhServiceTable from "./components/PnhServiceTable.vue";
+import { pnhServiceDisplayName } from "./PnhServiceDisplayName";
+import { pnhServiceRibbonIcon } from "./PnhServiceRoleIcons";
+import { usePnhWorkbenchPreferencesStore } from "./stores/PnhWorkbenchPreferencesStore";
 
-const preferences = usePdhWorkbenchPreferencesStore();
+const preferences = usePnhWorkbenchPreferencesStore();
 const {
   presentation,
   ribbonAppearance,
@@ -152,9 +152,9 @@ const navigationNodes = computed<readonly PnwNavigationNode[]>(() => {
         .filter((service) => service.definition.moduleId === module.id)
         .map((service, serviceIndex) => ({
           id: service.definition.id,
-          label: pdhServiceDisplayName(service.definition),
-          shortLabel: pdhServiceDisplayName(service.definition),
-          icon: pdhServiceRibbonIcon(service),
+          label: pnhServiceDisplayName(service.definition),
+          shortLabel: pnhServiceDisplayName(service.definition),
+          icon: pnhServiceRibbonIcon(service),
           order: serviceIndex * 10,
         })),
     }],
@@ -178,7 +178,7 @@ const navigationNodes = computed<readonly PnwNavigationNode[]>(() => {
     order: 10,
     children: [{
       id: "system-services",
-      label: "Dev Hub",
+      label: "Hub",
       children: [
         { id: "services-all", label: "服务总览", icon: "▦" },
         { id: "services-settings", label: "服务设置", icon: "⚙" },
@@ -291,7 +291,7 @@ async function refreshServices(): Promise<void> {
   if (refreshPending) return;
   refreshPending = true;
   try {
-    const response = await devHubApi.listServices();
+    const response = await hubApi.listServices();
     services.value = response.services;
     serviceConfigurationErrors.value = response.configurationErrors ?? [];
     lastRefreshAt.value = new Date(response.generatedAt);
@@ -317,7 +317,7 @@ async function refreshServices(): Promise<void> {
 
 async function refreshAdminPlugins(preferredId?: string): Promise<void> {
   try {
-    const catalog = await devHubApi.adminPluginCatalog();
+    const catalog = await hubApi.adminPluginCatalog();
     adminPluginCatalog.value = catalog;
     if (preferredId && catalog.plugins.some((plugin) => plugin.registration.id === preferredId)) {
       selectedAdminPluginId.value = preferredId;
@@ -335,7 +335,7 @@ async function adminPluginChanged(pluginId?: string): Promise<void> {
 
 async function refreshHostCapabilities(): Promise<void> {
   try {
-    systemTerminal.value = (await devHubApi.hostCapabilities()).systemTerminal;
+    systemTerminal.value = (await hubApi.hostCapabilities()).systemTerminal;
   } catch (error) {
     showError(error);
   }
@@ -408,7 +408,7 @@ async function refreshLogs(serviceId: string): Promise<void> {
   const requestEpoch = logRequestEpoch.get(serviceId) ?? 0;
   try {
     const knownGeneration = logGenerationByService.value[serviceId];
-    const response = await devHubApi.serviceLogs(
+    const response = await hubApi.serviceLogs(
       serviceId,
       logAfterByService.value[serviceId] ?? 0,
       knownGeneration,
@@ -444,7 +444,7 @@ async function clearActiveLog(): Promise<void> {
   if (!serviceId) return;
   logRequestEpoch.set(serviceId, (logRequestEpoch.get(serviceId) ?? 0) + 1);
   try {
-    const response = await devHubApi.clearServiceLogs(serviceId);
+    const response = await hubApi.clearServiceLogs(serviceId);
     const { serviceId: _serviceId, entries: _entries, ...info } = response;
     logEntriesByService.value = { ...logEntriesByService.value, [serviceId]: [] };
     logAfterByService.value = {
@@ -487,7 +487,7 @@ async function stopWithConfirmation(
   input: StopServiceRequest = {},
 ): Promise<ServiceRuntimeStatus | undefined> {
   try {
-    return await devHubApi.stopService(serviceId, input);
+    return await hubApi.stopService(serviceId, input);
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
     const details = stopDetails(error.details);
@@ -497,7 +497,7 @@ async function stopWithConfirmation(
     }
     if (error.code === "FORCE_STOP_REQUIRED" && details) {
       if (!await requestStopConfirmation(details, true)) return undefined;
-      return devHubApi.stopService(serviceId, { mode: "force", token: details.token });
+      return hubApi.stopService(serviceId, { mode: "force", token: details.token });
     }
     throw error;
   }
@@ -510,10 +510,10 @@ async function runAction(serviceId: string, action: "start" | "stop" | "restart"
   try {
     if (action === "start") {
       ensureLogTab(serviceId);
-      await devHubApi.startService(serviceId);
+      await hubApi.startService(serviceId);
     } else if (action === "restart") {
       ensureLogTab(serviceId);
-      await devHubApi.restartService(serviceId);
+      await hubApi.restartService(serviceId);
     } else {
       const stopped = await stopWithConfirmation(serviceId);
       if (!stopped) return;
@@ -535,7 +535,7 @@ async function runAction(serviceId: string, action: "start" | "stop" | "restart"
 async function createProfileDatabase(serviceId: string): Promise<void> {
   const service = services.value.find((item) => item.definition.id === serviceId);
   if (!service || busyIds.value.has(serviceId)) return;
-  const confirmation = pdhProfileDatabaseConfirmation(service);
+  const confirmation = pnhProfileDatabaseConfirmation(service);
   if (!confirmation || !window.confirm(confirmation.message)) return;
   const profileServices = services.value.filter((item) => (
     (item.definition.seriesId ?? item.definition.moduleId) === (service.definition.seriesId ?? service.definition.moduleId)
@@ -543,7 +543,7 @@ async function createProfileDatabase(serviceId: string): Promise<void> {
   ));
   busyIds.value = new Set([...busyIds.value, ...profileServices.map((item) => item.definition.id)]);
   try {
-    await devHubApi.createProfileDatabase(
+    await hubApi.createProfileDatabase(
       serviceId,
       confirmation.confirmation,
     );
@@ -610,7 +610,7 @@ async function runProfileAction(input: {
         // restart 的 target 是停止前快照；不能用旧 lifecycle 跳过刚刚停止的服务。
         if (input.action !== "restart" && service.lifecycle !== "stopped") continue;
         ensureLogTab(service.definition.id);
-        await devHubApi.startService(service.definition.id);
+        await hubApi.startService(service.definition.id);
       }
     }
   } catch (error) {
@@ -631,7 +631,7 @@ function openRuntimeLog(serviceId: string): void {
 
 async function openSystemTerminal(serviceId: string): Promise<void> {
   try {
-    await devHubApi.openSystemTerminal(serviceId);
+    await hubApi.openSystemTerminal(serviceId);
   } catch (error) {
     showError(error);
   }
@@ -662,7 +662,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="dev-hub-app">
+  <div class="hub-app">
     <PnwWorkbenchShell
       v-model:presentation="presentation"
       v-model:expanded-node-ids="expandedNodeIds"
@@ -674,17 +674,17 @@ onBeforeUnmount(() => {
       v-model:active-bottom-tab-id="activeBottomTabId"
       v-model:tab-bar-placement="tabBarPlacement"
       v-model:display-settings-positions="displaySettingsPositions"
-      class="dev-hub-workbench"
+      class="hub-workbench"
       :nodes="navigationNodes"
       :active-node-id="activeNodeId"
       :contributions="{ primary: true, bottom: true }"
       :bottom-tabs="logTabs"
       :tabs="workbenchTabs"
       :active-tab-id="activeWorkbenchTabId"
-      brand-title="Phoenix Dev Hub"
+      brand-title="Phoenix Hub"
       brand-subtitle="127.0.0.1:42100"
       tree-header-label="网站与系统"
-      header-aria-label="Phoenix Dev Hub 页眉"
+      header-aria-label="Phoenix Hub 页眉"
       activity-aria-label="开发服务导航"
       @activate="activateNode"
       @select-module="selectModule"
@@ -703,7 +703,7 @@ onBeforeUnmount(() => {
         <button type="button" aria-label="关闭错误消息" @click="errorMessage = ''">×</button>
       </div>
 
-      <PdhAdminPluginView
+      <PnhAdminPluginView
         v-if="adminPluginViewActive"
         :catalog="adminPluginCatalog"
         :selected-id="selectedAdminPluginId"
@@ -714,7 +714,7 @@ onBeforeUnmount(() => {
         @error="showError"
       />
 
-      <PdhServiceConfigView
+      <PnhServiceConfigView
         v-else-if="activeNodeId === 'services-settings'"
         open
         embedded
@@ -725,14 +725,14 @@ onBeforeUnmount(() => {
         @error="showError"
       />
 
-      <PdhHubSettingsView
+      <PnhHubSettingsView
         v-else-if="activeNodeId === 'hub-settings'"
         @admin-plugin-settings-changed="adminPluginChanged"
         @open-service-settings="openServiceSettings"
         @error="showError"
       />
 
-      <PdhServiceTable
+      <PnhServiceTable
         v-else
         :services="filteredServices"
         :configuration-errors="serviceConfigurationErrors"
@@ -756,7 +756,7 @@ onBeforeUnmount(() => {
       />
 
       <template #primary>
-        <PdhAdminPluginPrimaryPanel
+        <PnhAdminPluginPrimaryPanel
           v-if="adminPluginViewActive"
           :plugins="adminPluginCatalog?.plugins ?? []"
           :selected-id="selectedAdminPluginId"
@@ -764,7 +764,7 @@ onBeforeUnmount(() => {
           @changed="adminPluginChanged"
           @error="showError"
         />
-        <PdhPrimaryPanel
+        <PnhPrimaryPanel
           v-else
           :title="servicePrimaryTitle"
           :services="services"
@@ -774,7 +774,7 @@ onBeforeUnmount(() => {
         />
       </template>
       <template #bottom>
-        <PdhLogPanel
+        <PnhLogPanel
           :entries="activeLogEntries"
           :service-name="activeLogService?.definition.name"
           :log-tab-count="logTabs.length"
@@ -793,7 +793,7 @@ onBeforeUnmount(() => {
         <span v-if="lastRefreshAt">最近刷新 {{ lastRefreshAt.toLocaleTimeString('zh-CN', { hour12: false }) }}</span>
       </template>
     </PnwWorkbenchShell>
-    <PdhProcessStopConfirmation
+    <PnhProcessStopConfirmation
       v-if="pendingStopConfirmation"
       :details="pendingStopConfirmation.details"
       :force="pendingStopConfirmation.force"
@@ -805,7 +805,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.dev-hub-app, .dev-hub-workbench { width: 100%; height: 100%; }
+.hub-app, .hub-workbench { width: 100%; height: 100%; }
 .header-actions { display: flex; align-items: center; gap: 8px; padding-right: 7px; }
 .running-summary { display: inline-flex; align-items: center; gap: 6px; color: var(--pnw-workbench-muted, var(--pnw-workbench-default-muted, #64748b)); font-size: 11px; white-space: nowrap; }
 .running-summary i { width: 7px; height: 7px; border-radius: 999px; background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, .12); }

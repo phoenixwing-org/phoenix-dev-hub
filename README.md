@@ -1,13 +1,13 @@
-# Phoenix Dev Hub
+# Phoenix Hub
 
-当前版本：**0.4.2**
+当前版本：**0.5.0**
 
-Phoenix Dev Hub 是 Phoenix 工作区内开发服务的本机控制台。它用一个 Node 进程、一个端口同时提供 Web 工作台和控制 API，不再要求记住每个仓库的启动命令与端口。
+Phoenix Hub 是 Phoenix 工作区内开发服务的本机控制台。它用一个 Node 进程、一个端口同时提供 Web 工作台和控制 API，不再要求记住每个仓库的启动命令与端口。
 
 ## 项目仓库
 
-- Gitee（`gitee`）：[phoenixwing/phoenix-dev-hub](https://gitee.com/phoenixwing/phoenix-dev-hub)
-- GitHub（`github`）：[phoenixwing-org/phoenix-dev-hub](https://github.com/phoenixwing-org/phoenix-dev-hub)
+- Gitee（`gitee`）：[phoenixwing/phoenix-hub](https://gitee.com/phoenixwing/phoenix-hub)
+- GitHub（`github`）：[phoenixwing-org/phoenix-hub](https://github.com/phoenixwing-org/phoenix-hub)
 
 提交前可用 `git remote -v` 核对两个正式远端；默认远端仍是 Gitee 的 `origin`，不会自动向 GitHub 推送。
 
@@ -36,7 +36,7 @@ http://127.0.0.1:42100
 - 日志仍保留原始 stdout/stderr 来源；明确的 `Warning`、`DeprecationWarning`、Browserslist/caniuse-lite 等警告以黄色显示，其他 stderr 继续按错误显示。
 - 最近 500 行只保存在内存中；界面分别标注当前显示条数、服务端保留条数/容量和本 generation 累计条数。“清空本次会话日志”会在服务端建立新 generation，旧 cursor、后续轮询或重连均不会回填旧 500 行，新日志仍可继续追加。
 - “打开系统终端”与运行日志相互独立：仅在本机桌面会话中打开到服务目录的 macOS Terminal、Windows PowerShell/CMD 或 Linux 桌面终端，不自动执行命令；远程、SSH、容器及无桌面环境禁用。
-- “系统 → Dev Hub → Hub 设置”管理 Hub 自身：显示版本、地址与终端能力，可打开固定项目目录终端，并在二次确认后安全停止 Hub-owned 服务再关闭 Hub；其中“Phoenix Admin 开发支持”统一显示和编辑插件开发 Host 的 Vue/Node 根目录及服务 ID。没有 launchd/systemd/Docker 等外部 supervisor 时不提供会误导的假重启按钮。
+- “系统 → Hub → Hub 设置”管理 Hub 自身：显示版本、地址与终端能力，可打开固定项目目录终端，并在二次确认后安全停止 Hub-owned 服务再关闭 Hub；其中“Phoenix Admin 开发支持”统一显示和编辑插件开发 Host 的 Vue/Node 根目录及服务 ID。没有 launchd/systemd/Docker 等外部 supervisor 时不提供会误导的假重启按钮。
 - Wing 工作台支持 Ribbon / Tree、三种 Ribbon 外观、Primary、Bottom 运行日志与 Footer；服务 Properties 位于左侧 Primary 的模块列表下方，默认不启用 Secondary。
 - 工作台首次打开跟随系统浅色/深色模式；Series 与 Profile 始终遵循配置建议顺序，实例内服务首次默认按名称排序。显示偏好、服务搜索词和排序方式由 Pinia Store 持有并写入本机存储，用户切换后刷新仍保持选择。
 - 导航只有“网站”和“系统”两个大分组；网站下面一套网站一个模块，同一模块可以包含 Web、API 等多个受控进程。
@@ -44,7 +44,7 @@ http://127.0.0.1:42100
 - 示例另提供独立“Cool Admin Midway 4”组：纯 Cool Vue 8.x 使用 9200，纯 Cool Node 8.x / Midway 4 使用 8001 和精确命名的本机 PostgreSQL 联调库。它不装载 Phoenix、Wing、Pah 或业务插件；右侧 Properties 显示源码基线与人工联调帮助。
 - Profile 的 `environmentKind` 支持 `development/release-validation/preproduction/production`。非开发环境必须从不可变 Pah 业务包装配；production 默认只读，Hub 不提供会假装成功的启动、停止、重启、迁移或导入入口。
 - 发布包装配只写 `.runtime/assemblies`，启动前复核包 SHA/integrity、clean Host commit、隔离数据库、离线 frozen lock、Registry 精确依赖与 realpath；拒绝 `file:/link:/workspace:`、override、源码 symlink 和相邻仓回退。Hub 不执行 Pah 安装、DDL、建库、seed 或权限变更。
-- 默认项目使用 Hub 同级目录的相对路径；“系统 → Dev Hub”下的“服务设置”与“服务总览”并列，集中管理配置，不占用总览的运行操作空间。
+- 默认项目使用 Hub 同级目录的相对路径；“系统 → Hub”下的“服务设置”与“服务总览”并列，集中管理配置，不占用总览的运行操作空间。
 - 服务列表与设置 View 明确标记“默认 / 默认·已覆盖 / 已隐藏 / User”。默认服务支持本机编辑、隐藏/显示与一键重置用户配置基线；User 项目支持添加、编辑与只移出 Hub 的删除。
 - 默认服务、User 项目可单项或整套导出；整套格式为 version 2，单服务兼容导出和旧配置导入仍支持 version 1，所有导入都会重新经过后端安全校验。
 - “系统 → Admin 工具 → Admin 插件”提供独立 Wing View：选择本机产品目录、识别 Admin Plugin Manifest v2、管理 Vue/Node 开发 symlink、展示 Git exclude 与操作明细，并统一启动/核验 Admin Host。插件不会被伪装成可启动网站；详见 [`docs/Admin插件开发工作区.md`](docs/Admin插件开发工作区.md)。
@@ -68,7 +68,7 @@ http://127.0.0.1:42100
 
 ## Wing 0.7.1 依赖策略
 
-Dev Hub 正式依赖只声明并锁定 npm Registry 的精确版本
+Hub 正式依赖只声明并锁定 npm Registry 的精确版本
 `phoenix-wing@0.7.1`。默认开发、类型检查、测试与构建均从安装后的 Registry 包
 解析，不自动跟随相邻 Wing 仓库，开发者需要升级时必须主动修改精确版本并重新验证。
 Hub 不提供 Wing 本地源码模式；开发服务器、测试与生产构建均只从 Registry 包
@@ -86,23 +86,23 @@ pnpm build
 NODE_ENV=production pnpm start
 ```
 
-开发与生产均只绑定 `127.0.0.1:42100`。关闭 Dev Hub 时，它会停止本次由自己启动的服务进程组；不会主动停止外部服务。
+开发与生产均只绑定 `127.0.0.1:42100`。关闭 Hub 时，它会停止本次由自己启动的服务进程组；不会主动停止外部服务。
 
-## `Pdh` 命名惯例
+## `Pnh` 命名惯例
 
-`Pdh` 是 **Phoenix Dev Hub** 的内部前缀，用于一眼区分本项目拥有的产品构件与
+`Pnh` 是 **Phoenix Hub** 的内部前缀，用于一眼区分本项目拥有的产品构件与
 Wing、Vue 或通用基础设施：
 
-- Dev Hub 专属 Vue 组件使用 `PdhXxx.vue`，组件名也声明为 `PdhXxx`；
-- Dev Hub 专属核心协调类使用 `PdhXxx`，对应 TypeScript 文件也使用
-  `PdhXxx.ts`；测试文件沿用 `PdhXxx.test.ts`；
+- Hub 专属 Vue 组件使用 `PnhXxx.vue`，组件名也声明为 `PnhXxx`；
+- Hub 专属核心协调类使用 `PnhXxx`，对应 TypeScript 文件也使用
+  `PnhXxx.ts`；测试文件沿用 `PnhXxx.test.ts`；
 - `App.vue`、`main.ts` 等框架入口，以及 `api.ts`、错误、日志缓冲、端点探测等
   通用技术模块不机械添加前缀；
-- HTTP 路径、JSON 字段、配置文件名和共享传输协议保持语义命名，不把 `Pdh`
+- HTTP 路径、JSON 字段、配置文件名和共享传输协议保持语义命名，不把 `Pnh`
   扩散到持久化格式；
-- `Pnw` 只属于 Phoenix Wing，Dev Hub 内部不得复用该前缀。
+- `Pnw` 只属于 Phoenix Wing，Hub 内部不得复用该前缀。
 
-新增文件先判断是否为 Dev Hub 独有的可识别产品构件；只有这一类使用 `Pdh`，
+新增文件先判断是否为 Hub 独有的可识别产品构件；只有这一类使用 `Pnh`，
 避免“所有文件都有前缀”而失去区分价值。
 
 ## 配置服务与项目
@@ -132,7 +132,7 @@ Midway 4 sample 中的 `MIDWAY4_DB_USERNAME=replace-me` 必须在用户配置中
 - 可选 `identity`：一个本机 JSON URL 及要精确匹配的顶层字符串、数字或布尔字段，可用于服务名与版本门禁；
 - 外部停止策略 `deny` 或 `confirm-matching-cwd`。
 
-URL 只允许 `http(s)://127.0.0.1`、`localhost` 或 `::1`。直接配置 `sh`、`bash`、`zsh`、PowerShell 等 shell 会导致 Dev Hub 启动失败。
+URL 只允许 `http(s)://127.0.0.1`、`localhost` 或 `::1`。直接配置 `sh`、`bash`、`zsh`、PowerShell 等 shell 会导致 Hub 启动失败。
 
 网页编辑默认服务时不会修改 `config/services.user.json`，而是把差异和隐藏状态写入
 Git 忽略的 `.runtime/services.json`。“重置默认”清除这些本机状态并恢复用户基线。
@@ -145,10 +145,10 @@ version 2 本机覆盖，同时保留原 Profile 的本机目录、端口和数�
 自定义 Node.js 项目不修改默认清单。后端只接受一个已有的本地目录和该目录
 `package.json` 中真实存在的 script，并依据 `packageManager` 或 lockfile 选择
 `pnpm`、`npm`、`yarn` 或 `bun`。浏览器不能提交 executable、参数或环境变量。
-没有配置固定端口的自定义项目按 Dev Hub 管理的进程状态显示，仍可启动、停止和查看日志。
+没有配置固定端口的自定义项目按 Hub 管理的进程状态显示，仍可启动、停止和查看日志。
 
 User 项目保存在 `.runtime/projects.json`；移除不会删除磁盘目录。单独导入旧版
-`phoenix-dev-hub-projects` version 1 仍受支持；新的整套格式为 `phoenix-dev-hub-config`
+`phoenix-hub-projects` version 1 仍受支持；新的整套格式为 `phoenix-hub-config`
 version 2，同时包含 Series/Profile 默认服务、隐藏状态和 User 项目。导入不会删除未包含的配置：
 默认服务按稳定 ID 覆盖，User 项目按真实目录更新或新增。JSON 可能包含本机绝对路径，
 换机器后应先点检路径。后端不会信任导入文件，仍会重新解析、校验并拒绝不安全配置。
@@ -157,7 +157,7 @@ version 2，同时包含 Series/Profile 默认服务、隐藏状态和 User 项�
 应使用相同 `moduleId` 配置 Web、API 两个服务；联合启动脚本仍只算一个服务。
 系统终端接口只接收服务 ID，工作目录始终来自后端已验证的服务配置，浏览器不能
 提交终端路径或要执行的命令。无法由环境变量自动识别的端口转发场景，应以
-`PHOENIX_DEV_HUB_REMOTE=1` 启动 Hub，显式禁用系统终端入口。
+`PHOENIX_HUB_REMOTE=1` 启动 Hub，显式禁用系统终端入口。
 
 `config/services.user.json` 以及 `.runtime` 下的 `services.json`、`projects.json`、`admin-plugins.json`
 可能包含本机绝对路径或环境身份，均受 Git 忽略，不得提交。它们不属于发布包备份范围；
@@ -193,7 +193,7 @@ Phoenix Admin Development 的 sample 命令保持为纯 `pnpm dev`，数据库�
 密码和备份路径不得进入 Git。
 
 Admin 开发联调中，Web 使用 `pnpm dev:local` 消费相邻本地 Wing；它是 Admin 提供的
-`dev:wing-local` 便捷别名。API 仍使用普通 `pnpm dev`。这不改变 Dev Hub 自身对 Registry
+`dev:wing-local` 便捷别名。API 仍使用普通 `pnpm dev`。这不改变 Hub 自身对 Registry
 Wing 0.7.1 的锁定。
 
 发布验收管理员重置是独立、操作员显式执行的本机工具，不是普通 start 的副作用：
@@ -213,7 +213,7 @@ API 或 Git 中写出密码。
 
 | 方法 | 路径 | 用途 |
 |---|---|---|
-| `GET` | `/api/health` | Dev Hub 健康检查 |
+| `GET` | `/api/health` | Hub 健康检查 |
 | `GET` | `/api/services` | 全部服务状态 |
 | `GET` | `/api/host-capabilities` | 查询当前会话能否打开系统终端 |
 | `GET` | `/api/hub` | 读取 Hub 版本、地址、固定项目目录与生命周期能力 |
@@ -254,8 +254,8 @@ API 或 Git 中写出密码。
 
 ## 许可与仓库
 
-Phoenix Dev Hub 使用 [Apache License 2.0](LICENSE)。正式仓库为
-[gitee.com/phoenixwing/phoenix-dev-hub](https://gitee.com/phoenixwing/phoenix-dev-hub)，旧地址不再作为发布入口。
+Phoenix Hub 使用 [Apache License 2.0](LICENSE)。正式仓库为
+[gitee.com/phoenixwing/phoenix-hub](https://gitee.com/phoenixwing/phoenix-hub)，旧地址不再作为发布入口。
 
 Copyright © 2024–2026 凤凰之翼（PhoenixWing）贡献者。
 

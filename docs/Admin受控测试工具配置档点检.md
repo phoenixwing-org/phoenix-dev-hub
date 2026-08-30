@@ -6,23 +6,23 @@
 
 Owner 输入日期：2026-08-03
 
-范围：只修改 Phoenix Dev Hub。Open Issue 仅作为解锁后的消费者实证，不在 Dev Hub 增加产品 ID、目录或命令特例。
+范围：只修改 Phoenix Hub。Open Issue 仅作为解锁后的消费者实证，不在 Hub 增加产品 ID、目录或命令特例。
 
 ## 当前窗口保护
 
-- [x] 登记任务前确认 Dev Hub 工作树 clean。
+- [x] 登记任务前确认 Hub 工作树 clean。
 - [x] 解锁前的基线提交只写任务输入与验收清单；归档不绑定具体 commit。
 - [x] 不停止、重启或重新配置当前 Hub、Admin Web、Admin API、Open Issue 服务。
 - [x] 排队登记阶段不解析或执行 Vitest，不访问网络，不安装依赖。
 - [x] 收到总控“Driver 已结束，可以启动本 P0”的明确消息。
 
-Provider 可以实现和运行 Dev Hub 仓内临时 fixture 门禁；Admin API 重启与产品消费者实证继续由总控安排。
+Provider 可以实现和运行 Hub 仓内临时 fixture 门禁；Admin API 重启与产品消费者实证继续由总控安排。
 
 ## 已锁定设计
 
 ### 1. 通用 Resolver
 
-新增 `PdhControlledToolProfileResolver`，从配置的 Admin Web root 解析受控测试工具：
+新增 `PnhControlledToolProfileResolver`，从配置的 Admin Web root 解析受控测试工具：
 
 - 只接受 Admin Web root 已安装且 lock 锁定的 Vitest `3.2.7`；
 - 从明确的 Host/package root 解析，不搜索 `PATH`，不调用 package runner 的下载能力，不联网；
@@ -48,18 +48,18 @@ Profile 至少包含：
 | `availability` | `available` / `unavailable` |
 | `unavailableReason` | 失败时的稳定、非敏感原因 |
 
-`packageSha256` 使用 `pdh-package-sha256-v1`：递归收集 package root 内全部普通文件，拒绝内部
+`packageSha256` 使用 `pnh-package-sha256-v1`：递归收集 package root 内全部普通文件，拒绝内部
 symlink 与特殊文件；相对路径统一为 `/` 并按二进制词法排序，每项按“UTF-8 相对路径 + NUL +
 原始文件字节 + NUL”进入 SHA-256。目录 mtime、权限和机器绝对路径不参与哈希。
 
 ### 2. 启动时保留环境注入
 
-为 `PdhServiceManager` 增加内部 `runtimeEnvProvider`：
+为 `PnhServiceManager` 增加内部 `runtimeEnvProvider`：
 
 - 只对 Admin 插件设置中 `adminApiServiceId` 指向的服务注入受控工具 Profile；
 - 注入顺序必须为 `process.env` → `definition.command.env` → Hub 保留 runtime env；
 - Hub 保留键最后写入，用户 `command.env` 无法覆盖或伪造；
-- `PHOENIX_DEV_HUB_SERVICE_ID` 等现有 Hub 保留键继续由 Hub 最后写入；
+- `PHOENIX_HUB_SERVICE_ID` 等现有 Hub 保留键继续由 Hub 最后写入；
 - spawn 继续使用参数数组、`shell: false`，不得拼接 shell 命令；
 - 其他服务不接收该 Profile，现有环境合并和生命周期不改变。
 
@@ -67,10 +67,10 @@ symlink 与特殊文件；相对路径统一为 `/` 并按二进制词法排序�
 
 #### 精确 env 契约
 
-- 唯一键：`PHOENIX_DEV_HUB_CONTROLLED_TOOL_PROFILE`
+- 唯一键：`PHOENIX_HUB_CONTROLLED_TOOL_PROFILE`
 - 编码：单行 UTF-8 JSON，最大 `16384` 字节
 - `schemaVersion`：`1`
-- `profileId`：`pdh.controlled.vitest`
+- `profileId`：`pnh.controlled.vitest`
 - `toolId` / `toolVersion`：`vitest` / `3.2.7`
 - 父进程和 `command.env` 中的同名键会先删除；只有 Hub 内部 Provider 可以最后注入。
 
@@ -79,7 +79,7 @@ symlink 与特殊文件；相对路径统一为 `/` 并按二进制词法排序�
 ```json
 {
   "schemaVersion": 1,
-  "profileId": "pdh.controlled.vitest",
+  "profileId": "pnh.controlled.vitest",
   "toolId": "vitest",
   "toolVersion": "3.2.7",
   "availability": "available",
@@ -92,7 +92,7 @@ symlink 与特殊文件；相对路径统一为 `/` 并按二进制词法排序�
   "lockfileSha256": "<64 lowercase hex>",
   "entrypointSha256": "<64 lowercase hex>",
   "packageSha256": "<64 lowercase hex>",
-  "packageHashFormat": "pdh-package-sha256-v1",
+  "packageHashFormat": "pnh-package-sha256-v1",
   "packageFileCount": 109
 }
 ```
@@ -102,7 +102,7 @@ symlink 与特殊文件；相对路径统一为 `/` 并按二进制词法排序�
 ```json
 {
   "schemaVersion": 1,
-  "profileId": "pdh.controlled.vitest",
+  "profileId": "pnh.controlled.vitest",
   "toolId": "vitest",
   "toolVersion": "3.2.7",
   "availability": "unavailable",
@@ -118,15 +118,15 @@ symlink 与特殊文件；相对路径统一为 `/` 并按二进制词法排序�
 - Vitest 缺失、身份不符、版本不符、lock 证据缺失、SHA 不符、realpath 越界时，Resolver 返回 `unavailable` 和稳定原因；
 - 工具不可用不阻止 Admin API 本身启动，便于健康检查与诊断；
 - 外部启动的 Admin API 没有 Hub Profile，产品测试入口必须 fail-closed，不回退到 `PATH`、`npx`、`pnpm dlx` 或联网下载；
-- Dev Hub 只提供经过验证的工具事实，不把“API 已启动”或“工具 Profile 存在”解释为产品测试通过；
+- Hub 只提供经过验证的工具事实，不把“API 已启动”或“工具 Profile 存在”解释为产品测试通过；
 - 日志不得输出连接串、token 或完整环境，仅显示 Profile ID、工具版本、可用状态和非敏感失败原因。
 
 ## 实施清单
 
 - [x] 冻结 Profile TypeScript 契约、保留 env 键名和 package SHA 口径。
-- [x] 实现 `PdhControlledToolProfileResolver`，只解析 Admin Web root 的锁定 Vitest。
+- [x] 实现 `PnhControlledToolProfileResolver`，只解析 Admin Web root 的锁定 Vitest。
 - [x] 实现 lock identity/integrity、realpath containment、版本与双 SHA 核验。
-- [x] 为 `PdhServiceManager` 增加可注入、默认无副作用的内部 `runtimeEnvProvider`。
+- [x] 为 `PnhServiceManager` 增加可注入、默认无副作用的内部 `runtimeEnvProvider`。
 - [x] 由装配根按 `adminApiServiceId` 绑定 Provider，不在 ServiceManager 写产品或服务 ID 特例。
 - [x] 保证 runtime env 最后合并并拒绝 `command.env` 覆盖保留键。
 - [x] 工具不可用时以 unavailable Profile 启动目标服务，并提供可诊断日志。
@@ -167,12 +167,12 @@ Open Issue 只用于证明通用能力可消费，不作为 Resolver 的判断�
 - [ ] Admin API 缺少测试工具时仍能启动并清楚报告“受控工具不可用”。
 - [ ] 外部启动的 Admin API 不会偷偷调用本机 PATH 中的 Vitest。
 - [ ] 修改用户服务 env 不能替换 Hub 保留 Profile。
-- [ ] Open Issue 能使用同一通用 Profile，Dev Hub 中没有 Open Issue 特判。
+- [ ] Open Issue 能使用同一通用 Profile，Hub 中没有 Open Issue 特判。
 - [ ] 其他服务的启动、日志、健康检查与停止行为保持原样。
 
 ## Provider 实施结果
 
-- Dev Hub 完整门禁：12 个测试文件、51 项测试，类型检查与生产构建通过。
+- Hub 完整门禁：12 个测试文件、51 项测试，类型检查与生产构建通过。
 - 真实 Admin Web root 只读解析：`vitest@3.2.7`、109 个 package 文件，lockfile、entrypoint、package SHA 均已生成并完成二次复核。
 - 运行边界：没有停止、重启或重新配置当前 Admin API；没有运行 Open Issue 或其他产品消费者。
 - 剩余工作：由总控安排受控重启，再由产品消费者验证 Profile schema/SHA 和无 Profile fail-closed。

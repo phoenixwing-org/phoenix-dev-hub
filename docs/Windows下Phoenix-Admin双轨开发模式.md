@@ -4,7 +4,7 @@
 
 ## 1. 动态兼容基线
 
-- Phoenix Dev Hub 的版本和 package manager 以 `E:\phoenix\phoenix-dev-hub\package.json` 为准。
+- Phoenix Hub 的版本和 package manager 以 `E:\phoenix\phoenix-hub\package.json` 为准。
 - Admin Vue、Admin Node、Open Issue、Phoenix Wing 与 Branding 使用任务指定的 Git 分支；日常双轨示例通常从 `develop` 创建 `inprocess`，但归档不固定 commit SHA。
 - Open Issue 与 Branding 的插件版本、Host/Wing 兼容范围、入口和校验值以各自 `packages/admin-plugin/manifest.json` 为准。
 - Hub Registry 版本以 Hub 自身依赖和锁文件为准；Hub 不消费相邻 `phoenix-wing` 源码目录。
@@ -128,7 +128,7 @@ Host 的 `.git/info/exclude` 应包含 `/src/modules/<moduleId>`，只用于避�
 
 Open Issue 登记示例位于 `config/sample/admin-plugins.windows.sample.json`。标准操作顺序：
 
-1. 打开“系统 → Dev Hub → Hub 设置 → Phoenix Admin 开发支持”，确认 Host 指向主 Vue/Node 与测试服务 ID。
+1. 打开“系统 → Hub → Hub 设置 → Phoenix Admin 开发支持”，确认 Host 指向主 Vue/Node 与测试服务 ID。
 2. 打开“系统 → Admin 工具 → Admin 插件”。
 3. 对 Open Issue 执行“检查”，确认 `sourceState=available`、Manifest `0.7.2`、DDL 和 artifacts 校验通过。
 4. 执行“开发挂载”；Windows 无普通 symlink 权限时，可先用 `Junction` 创建两条准确链接，再让 Hub 认领并写入 Git exclude。

@@ -1,4 +1,4 @@
-export class DevHubError extends Error {
+export class HubError extends Error {
   constructor(
     readonly code: string,
     message: string,
@@ -6,6 +6,6 @@ export class DevHubError extends Error {
     readonly details?: unknown,
   ) {
     super(message);
-    this.name = "DevHubError";
+    this.name = "HubError";
   }
 }

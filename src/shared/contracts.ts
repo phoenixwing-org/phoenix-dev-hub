@@ -287,7 +287,7 @@ export interface LocalProjectTransferItem {
 }
 
 export interface LocalProjectTransferDocument {
-  readonly format: "phoenix-dev-hub-projects";
+  readonly format: "phoenix-hub-projects";
   readonly version: 1;
   readonly projects: readonly LocalProjectTransferItem[];
 }
@@ -315,26 +315,26 @@ export interface BuiltinServiceSeriesConfigEntry {
   readonly services: readonly ServiceDefinition[];
 }
 
-export interface DevHubConfigurationDocumentV1 {
-  readonly format: "phoenix-dev-hub-config";
+export interface HubConfigurationDocumentV1 {
+  readonly format: "phoenix-hub-config";
   readonly version: 1;
   readonly services: readonly ServiceDefinition[];
   readonly projects: readonly LocalProjectTransferItem[];
 }
 
-export interface DevHubConfigurationDocumentV2 {
-  readonly format: "phoenix-dev-hub-config";
+export interface HubConfigurationDocumentV2 {
+  readonly format: "phoenix-hub-config";
   readonly version: 2;
   readonly series: readonly ServiceSeriesSource[];
   readonly hiddenServiceIds: readonly string[];
   readonly projects: readonly LocalProjectTransferItem[];
 }
 
-export type DevHubConfigurationDocument =
-  | DevHubConfigurationDocumentV1
-  | DevHubConfigurationDocumentV2;
+export type HubConfigurationDocument =
+  | HubConfigurationDocumentV1
+  | HubConfigurationDocumentV2;
 
-export interface ImportDevHubConfigurationResponse {
+export interface ImportHubConfigurationResponse {
   readonly builtinUpdated: number;
   readonly seriesUpdated?: number;
   readonly projectsAdded: number;
@@ -465,7 +465,7 @@ export interface OpenSystemTerminalResponse {
 }
 
 export interface HubRuntimeInfo {
-  readonly name: "Phoenix Dev Hub";
+  readonly name: "Phoenix Hub";
   readonly version: string;
   readonly address: string;
   readonly projectRoot: string;

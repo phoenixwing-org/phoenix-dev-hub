@@ -26,7 +26,7 @@ async function probeHealth(url: string): Promise<{ healthy: boolean | null; stat
     const response = await fetch(url, {
       signal: AbortSignal.timeout(1_200),
       redirect: "manual",
-      headers: { "user-agent": "phoenix-dev-hub/0.1" },
+      headers: { "user-agent": "phoenix-hub/0.1" },
     });
     const parsed = new URL(url);
     const rootRouteMissing = response.status === 404
@@ -56,7 +56,7 @@ export async function probeServiceIdentity(
     const response = await fetch(identity.url, {
       signal: AbortSignal.timeout(1_200),
       redirect: "manual",
-      headers: { "user-agent": "phoenix-dev-hub/0.1" },
+      headers: { "user-agent": "phoenix-hub/0.1" },
     });
     if (response.status < 200 || response.status >= 300) {
       return {

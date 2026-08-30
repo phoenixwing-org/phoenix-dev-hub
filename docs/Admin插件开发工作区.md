@@ -1,7 +1,7 @@
 # Phoenix Admin 插件开发工作区
 
-状态：Phoenix Dev Hub 0.4.2 已实现装配核验边界与开发 Host 设置；产品迁移完成度仍由各产品任务验收
-适用范围：Phoenix Dev Hub 的“系统 → Admin 工具 → Admin 插件”独立 View
+状态：Phoenix Hub 0.5.0 已实现装配核验边界与开发 Host 设置；产品迁移完成度仍由各产品任务验收
+适用范围：Phoenix Hub 的“系统 → Admin 工具 → Admin 插件”独立 View
 
 ## 定位
 
@@ -37,7 +37,7 @@ symlink/marker 写入；不能通过修改 JSON 把插件标成 mounted。
 安全展示并核验“重新指向”，不替代对新目录的实时 inspect。已有旧格式登记保持兼容：旧目录
 仍可访问时会从 manifest 取得身份；若旧目录和身份快照都不可用，Hub 会拒绝猜测 moduleId。
 
-工作区设置只保存 Admin Vue/Node 根目录和对应服务 ID。“系统 → Dev Hub → Hub 设置 →
+工作区设置只保存 Admin Vue/Node 根目录和对应服务 ID。“系统 → Hub → Hub 设置 →
 Phoenix Admin 开发支持”是唯一的界面编辑入口；Admin 插件 View 只读展示当前目标并跳转到该设置，
 避免同一 Host 绑定在两处修改。日常开发 View 不接收数据库连接、访问令牌、备份路径或初始化参数；
 这些内容由开发者在 Hub 之外处理。
@@ -126,7 +126,7 @@ exclude 与登记；若自动回滚本身不完整，API 返回 `ADMIN_PLUGIN_RE
 - Manifest 声明的全部前端路由 HTTP 2xx 结果；
 - Manifest 声明摘要。
 
-该结果固定标记为“开发装配核验（非完整 verify）”，不能表示产品迁移完成。Dev Hub 会分别
+该结果固定标记为“开发装配核验（非完整 verify）”，不能表示产品迁移完成。Hub 会分别
 列出 Host-owned 与 plugin-owned 的 lint、typecheck、test、build 门禁；未取得真实命令、
 扫描根、是否跟随 symlink 和工具排除配置时统一显示“未记录”，不猜测通过。
 

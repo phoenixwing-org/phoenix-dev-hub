@@ -5,22 +5,22 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type {
   BuiltinServiceConfigCatalogResponse,
-  DevHubConfigurationDocument,
+  HubConfigurationDocument,
   LocalProjectTransferDocument,
   ServiceDefinition,
   ServiceProfileDatabaseCreationEvidence,
   ServiceRuntimeStatus,
 } from "../shared/contracts.js";
 import { createApiHandler } from "./api.js";
-import { PdhBuiltinServiceConfigStore } from "./PdhBuiltinServiceConfig.js";
-import { PdhProjectConfigStore } from "./PdhProjectConfig.js";
-import { PdhServiceManager } from "./PdhServiceManager.js";
-import { PdhSystemTerminal } from "./PdhSystemTerminal.js";
+import { PnhBuiltinServiceConfigStore } from "./PnhBuiltinServiceConfig.js";
+import { PnhProjectConfigStore } from "./PnhProjectConfig.js";
+import { PnhServiceManager } from "./PnhServiceManager.js";
+import { PnhSystemTerminal } from "./PnhSystemTerminal.js";
 
 const roots: string[] = [];
 const servers: Server[] = [];
 
-class CapturingTerminal extends PdhSystemTerminal {
+class CapturingTerminal extends PnhSystemTerminal {
   readonly directories: string[] = [];
 
   override capability() {
@@ -51,9 +51,9 @@ async function createFixture(includeBuiltin = false): Promise<{
   readonly databaseCreateRequests: readonly { serviceId: string; confirm: string }[];
   readonly terminalDirectories: readonly string[];
 }> {
-  const root = mkdtempSync(path.join(os.tmpdir(), "pdh-api-projects-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "pnh-api-projects-"));
   roots.push(root);
-  const hub = path.join(root, "phoenix-dev-hub");
+  const hub = path.join(root, "phoenix-hub");
   const first = path.join(root, "first-app");
   const second = path.join(root, "second-app");
   mkdirSync(hub);
@@ -71,10 +71,10 @@ async function createFixture(includeBuiltin = false): Promise<{
     endpoints: [{ id: "web", label: "Web", port: 64_532, required: true }],
     externalStop: "deny",
   };
-  const projectConfig = new PdhProjectConfigStore(hub);
-  const builtinServiceConfig = new PdhBuiltinServiceConfigStore(hub, includeBuiltin ? [baseline] : []);
+  const projectConfig = new PnhProjectConfigStore(hub);
+  const builtinServiceConfig = new PnhBuiltinServiceConfigStore(hub, includeBuiltin ? [baseline] : []);
   const terminal = new CapturingTerminal();
-  const manager = new PdhServiceManager(builtinServiceConfig.effectiveDefinitions(), terminal);
+  const manager = new PnhServiceManager(builtinServiceConfig.effectiveDefinitions(), terminal);
   const restartRequests: string[] = [];
   manager.restart = async (serviceId: string) => {
     restartRequests.push(serviceId);
@@ -149,7 +149,7 @@ describe("项目配置 API", () => {
     }>(`${fixture.baseUrl}/api/hub`);
     expect(info).toMatchObject({
       version: "test-version",
-      projectRoot: path.join(path.dirname(fixture.first), "phoenix-dev-hub"),
+      projectRoot: path.join(path.dirname(fixture.first), "phoenix-hub"),
       restartSupported: false,
     });
 
@@ -158,7 +158,7 @@ describe("项目配置 API", () => {
       "POST",
       { directory: "/tmp/evil", command: "ignored" },
     );
-    expect(terminal).toMatchObject({ opened: true, serviceId: "phoenix-dev-hub" });
+    expect(terminal).toMatchObject({ opened: true, serviceId: "phoenix-hub" });
     expect(fixture.terminalDirectories).toEqual([info.projectRoot]);
 
     const rejected = await fetch(`${fixture.baseUrl}/api/hub/shutdown`, {
@@ -172,7 +172,7 @@ describe("项目配置 API", () => {
     const accepted = await jsonRequest<{ accepted: true }>(
       `${fixture.baseUrl}/api/hub/shutdown`,
       "POST",
-      { confirm: "shutdown-phoenix-dev-hub" },
+      { confirm: "shutdown-phoenix-hub" },
     );
     expect(accepted.accepted).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 80));
@@ -280,10 +280,10 @@ describe("项目配置 API", () => {
       configurationOverridden: true,
     });
 
-    const exported = await jsonRequest<DevHubConfigurationDocument>(
+    const exported = await jsonRequest<HubConfigurationDocument>(
       `${fixture.baseUrl}/api/config/export`,
     );
-    expect(exported).toMatchObject({ format: "phoenix-dev-hub-config", version: 2 });
+    expect(exported).toMatchObject({ format: "phoenix-hub-config", version: 2 });
     if (exported.version !== 2) throw new Error("期望 version 2 配置");
     expect(exported.series).toHaveLength(1);
     const exportedSeries = exported.series[0]!;

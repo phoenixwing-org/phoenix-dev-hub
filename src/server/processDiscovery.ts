@@ -6,8 +6,8 @@ import type { ProcessSummary } from "../shared/contracts.js";
 
 const execFileAsync = promisify(execFile);
 
-const WINDOWS_PROCESS_QUERY_PID_ENV = "PHOENIX_DEV_HUB_PROCESS_QUERY_PID";
-const WINDOWS_PROCESS_QUERY_DESCENDANTS_ENV = "PHOENIX_DEV_HUB_PROCESS_QUERY_DESCENDANTS";
+const WINDOWS_PROCESS_QUERY_PID_ENV = "PHOENIX_HUB_PROCESS_QUERY_PID";
+const WINDOWS_PROCESS_QUERY_DESCENDANTS_ENV = "PHOENIX_HUB_PROCESS_QUERY_DESCENDANTS";
 const WINDOWS_PROCESS_DISCOVERY_SCRIPT = String.raw`
 $source = @'
 using System;
@@ -15,7 +15,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace PhoenixDevHub {
+namespace PhoenixHub {
   public static class ProcessCurrentDirectory {
     private const uint PROCESS_VM_READ = 0x0010;
     private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
@@ -182,7 +182,7 @@ $processes | ForEach-Object {
     ParentProcessId = $_.ParentProcessId
     CommandLine = $_.CommandLine
     CreationDate = $_.CreationDate
-    CurrentDirectory = [PhoenixDevHub.ProcessCurrentDirectory]::TryRead($_.ProcessId)
+    CurrentDirectory = [PhoenixHub.ProcessCurrentDirectory]::TryRead($_.ProcessId)
   }
 } | ConvertTo-Json -Compress
 `;

@@ -29,7 +29,7 @@
 - [x] 以 Git archive 将 clean Host 物化到新且为空的 assembly，no-replace，失败清理半成品；
 - [x] 只把包声明的 Node/Vue payload 复制到 Host 对应模块目录，拒绝覆盖、symlink、路径逃逸；
 - [x] 依赖只允许离线 frozen lock 安装到 assembly，禁止 lifecycle scripts 与联网；
-- [x] 扫描 package、pnpm lock/workspace/config，拒绝 `file:/link:/workspace:`、override、本地路径与相邻仓回退；
+- [x] 扫描 package、pnpm lock/workspace/config，拒绝 `file:/link:/workspace:`、插件或嵌套 override、本地路径与相邻仓回退；clean Host 根目录已归档的 override/patch 只在精确提交内接受，并校验 patch 为 Host 内普通文件；
 - [x] Registry 包校验名称、精确版本、lock integrity、实际 realpath 位于 assembly；
 - [x] 发布验收 Wing 使用用户配置冻结的 Registry 精确版本，状态展示版本、integrity/lock/realpath 证据；
 - [x] 校验 `assembly-evidence.json` 与当前配置、包、Host、数据库、Registry 证据完全一致；
@@ -46,6 +46,11 @@
 - [x] 前端各自代理到自己的 Node，进程组、PID、cwd、端口、环境、日志、数据库与插件装配目录隔离；
 - [x] Profile 级按 Node → Vue 启动、Vue → Node 停止；单实例失败不自动停止另一个实例；
 - [x] UI 系列列表显示一个 Phoenix Admin Series、两个独立 Profile 与各自环境/装配身份。
+
+实际插件发布候选需要同时证明“全新安装”和“可信恢复”时，应采用两个独立的
+`release-validation` / `package-assembled` Profile。两者可共享同一不可变包与 clean Host 输入，
+但数据库、端口、runtime slot、assembly root 和 evidence 必须完全隔离。详细契约与执行顺序见
+[`Admin插件安装与恢复双Profile验收.md`](Admin插件安装与恢复双Profile验收.md)。
 
 ## 自动验证与手工点检
 

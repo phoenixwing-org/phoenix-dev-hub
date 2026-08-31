@@ -43,7 +43,7 @@ http://127.0.0.1:42100
 - Series 可以包含多个隔离 Profile。示例中的 Phoenix Admin 提供“开发联调”（source-mounted / DEV ONLY，9000/8101）和“发布验收环境（非正式）”（package-assembled / Registry Wing，9100/8201）两套实例，可并行独立启停、重启、打开和查看日志。
 - 示例另提供独立“Cool Admin Midway 4”组：纯 Cool Vue 8.x 使用 9200，纯 Cool Node 8.x / Midway 4 使用 8001 和精确命名的本机 PostgreSQL 联调库。它不装载 Phoenix、Wing、Pah 或业务插件；右侧 Properties 显示源码基线与人工联调帮助。
 - Profile 的 `environmentKind` 支持 `development/release-validation/preproduction/production`。非开发环境必须从不可变 Pah 业务包装配；production 默认只读，Hub 不提供会假装成功的启动、停止、重启、迁移或导入入口。
-- 发布包装配只写 `.runtime/assemblies`，启动前复核包 SHA/integrity、clean Host commit、隔离数据库、离线 frozen lock、Registry 精确依赖与 realpath；拒绝 `file:/link:/workspace:`、override、源码 symlink 和相邻仓回退。Hub 不执行 Pah 安装、DDL、建库、seed 或权限变更。
+- 发布包装配只写 `.runtime/assemblies`，启动前复核包 SHA/integrity、clean Host commit、隔离数据库、离线 frozen lock、Registry 精确依赖与 realpath；拒绝 `file:/link:/workspace:`、插件或嵌套 override、源码 symlink 和相邻仓回退。clean Host 根目录已归档的 override/patch 只在精确提交内接受，并继续拒绝本地协议、绝对路径或缺失 patch。Hub 不执行 Pah 安装、DDL、建库、seed 或权限变更。
 - 默认项目使用 Hub 同级目录的相对路径；“系统 → Hub”下的“服务设置”与“服务总览”并列，集中管理配置，不占用总览的运行操作空间。
 - 服务列表与设置 View 明确标记“默认 / 默认·已覆盖 / 已隐藏 / User”。默认服务支持本机编辑、隐藏/显示与一键重置用户配置基线；User 项目支持添加、编辑与只移出 Hub 的删除。
 - 默认服务、User 项目可单项或整套导出；整套格式为 version 2，单服务兼容导出和旧配置导入仍支持 version 1，所有导入都会重新经过后端安全校验。
@@ -72,7 +72,8 @@ Hub 正式依赖只声明并锁定 npm Registry 的精确版本
 `phoenix-wing@0.7.1`。默认开发、类型检查、测试与构建均从安装后的 Registry 包
 解析，不自动跟随相邻 Wing 仓库，开发者需要升级时必须主动修改精确版本并重新验证。
 Hub 不提供 Wing 本地源码模式；开发服务器、测试与生产构建均只从 Registry 包
-解析。不得使用 `link:`、`file:`、`workspace:`、override 或相邻源码回退。
+解析。不得使用 `link:`、`file:`、`workspace:`、插件或嵌套 override，或相邻源码回退；冻结
+Host 自身已归档的 override/patch 由 package assembly 按精确提交和安全路径单独校验。
 
 ## 开发与构建
 

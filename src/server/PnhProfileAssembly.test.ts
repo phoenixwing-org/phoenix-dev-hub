@@ -23,14 +23,35 @@ function git(root: string, args: readonly string[]): string {
   return execFileSync("git", [...args], { cwd: root, encoding: "utf8" }).trim();
 }
 
-function createHost(root: string, runtime: "node" | "vue", localDependency = false): string {
+function createHost(
+  root: string,
+  runtime: "node" | "vue",
+  localDependency = false,
+  trustedHostPolicy = false,
+): string {
   mkdirSync(root, { recursive: true });
   const dependencies = runtime === "vue"
     ? { "phoenix-wing": "0.6.2", ...(localDependency ? { local: "file:../local" } : {}) }
     : {};
-  writeJson(path.join(root, "package.json"), { name: `${runtime}-host`, private: true, dependencies });
+  const packageJson: Record<string, unknown> = { name: `${runtime}-host`, private: true, dependencies };
+  if (trustedHostPolicy) {
+    packageJson.pnpm = {
+      overrides: { "host-dependency>transitive": "1.2.3" },
+      patchedDependencies: { "host-dependency@1.2.3": "patches/host-dependency.patch" },
+    };
+    mkdirSync(path.join(root, "patches"));
+    writeFileSync(path.join(root, "patches/host-dependency.patch"), "tracked host patch\n");
+  }
+  writeJson(path.join(root, "package.json"), packageJson);
   writeFileSync(path.join(root, "pnpm-lock.yaml"), [
     "lockfileVersion: '9.0'",
+    ...(trustedHostPolicy ? [
+      "overrides:",
+      "  host-dependency>transitive: 1.2.3",
+      "patchedDependencies:",
+      "  host-dependency@1.2.3:",
+      "    path: patches/host-dependency.patch",
+    ] : []),
     "importers:",
     "  .:",
     "    dependencies:",
@@ -60,7 +81,11 @@ function createHost(root: string, runtime: "node" | "vue", localDependency = fal
   return git(root, ["rev-parse", "HEAD"]);
 }
 
-function createPackage(root: string, wingPeer = ">=0.6.2 <0.7.0"): string {
+function createPackage(
+  root: string,
+  wingPeer = ">=0.6.2 <0.7.0",
+  payloadOverride = false,
+): string {
   const stage = path.join(root, "package-stage");
   mkdirSync(stage, { recursive: true });
   const plugin = {
@@ -84,9 +109,16 @@ function createPackage(root: string, wingPeer = ">=0.6.2 <0.7.0"): string {
   mkdirSync(path.join(stage, "payload/vue/sample-plugin"), { recursive: true });
   writeFileSync(path.join(stage, "payload/node/sample-plugin/config.ts"), "export default {}\n", { flag: "wx" });
   writeFileSync(path.join(stage, "payload/vue/sample-plugin/config.ts"), "export default {}\n", { flag: "wx" });
+  if (payloadOverride) {
+    writeJson(path.join(stage, "payload/node/sample-plugin/package.json"), {
+      name: "sample-plugin-payload",
+      pnpm: { overrides: { transitive: "1.2.3" } },
+    });
+  }
   const files = [
     "manifest.json",
     "payload/node/sample-plugin/config.ts",
+    ...(payloadOverride ? ["payload/node/sample-plugin/package.json"] : []),
     "payload/vue/sample-plugin/config.ts",
     "plugin.json",
   ];
@@ -114,14 +146,19 @@ function createPackage(root: string, wingPeer = ">=0.6.2 <0.7.0"): string {
   return archive;
 }
 
-function fixture(localDependency = false, wingPeer?: string) {
+function fixture(
+  localDependency = false,
+  wingPeer?: string,
+  trustedHostPolicy = false,
+  payloadOverride = false,
+) {
   const root = mkdtempSync(path.join(tmpdir(), "pnh-profile-assembly-"));
   roots.push(root);
   const nodeHost = path.join(root, "node-host");
   const vueHost = path.join(root, "vue-host");
-  const nodeCommit = createHost(nodeHost, "node");
+  const nodeCommit = createHost(nodeHost, "node", false, trustedHostPolicy);
   const vueCommit = createHost(vueHost, "vue", localDependency);
-  const archive = createPackage(root, wingPeer);
+  const archive = createPackage(root, wingPeer, payloadOverride);
   const outputRoot = path.join(root, "runtime/assembly");
   const policy: ServiceProfilePolicy = {
     environmentKind: "release-validation",
@@ -191,6 +228,20 @@ describe("PnhProfileAssembly", () => {
     expect(git(value.vueHost, ["status", "--short"])).toBe("");
     expect(await assembly.prepare(value.definitions)).toMatchObject({ state: "verified" });
     expect(assembly.inspect(value.definitions[0]!)).toMatchObject({ state: "verified" });
+  });
+
+  it("允许冻结 Host 根目录已归档的 override/patch，但拒绝插件 payload 注入", async () => {
+    const trusted = fixture(false, undefined, true);
+    await expect(new PnhProfileAssembly().prepare(trusted.definitions)).resolves.toMatchObject({
+      state: "verified",
+    });
+
+    const injected = fixture(false, undefined, false, true);
+    await expect(new PnhProfileAssembly().prepare(injected.definitions)).rejects.toMatchObject({
+      code: "PROFILE_PREFLIGHT_FAILED",
+      message: expect.stringContaining("插件或嵌套依赖配置包含 override/resolution"),
+    });
+    expect(() => readFileSync(path.join(injected.outputRoot, "assembly-evidence.json"))).toThrow();
   });
 
   it("拒绝本地依赖协议并清理未完成 assembly", async () => {

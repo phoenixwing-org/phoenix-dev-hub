@@ -298,7 +298,45 @@ function dependencySections(packageJson: Record<string, unknown>): Readonly<Reco
     .filter((value): value is Readonly<Record<string, unknown>> => Boolean(value) && typeof value === "object" && !Array.isArray(value));
 }
 
-function scanDependencyConfiguration(root: string): void {
+function stringLeaves(value: unknown): readonly string[] {
+  if (typeof value === "string") return [value];
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.values(value).flatMap(stringLeaves);
+}
+
+function assertTrustedHostDependencyPolicy(packageJson: Record<string, unknown>, hostRoot: string): void {
+  const pnpm = packageJson.pnpm;
+  const pnpmRecord = pnpm && typeof pnpm === "object" && !Array.isArray(pnpm)
+    ? pnpm as Record<string, unknown>
+    : undefined;
+  for (const specifier of [
+    packageJson.overrides,
+    packageJson.resolutions,
+    pnpmRecord?.overrides,
+  ].flatMap(stringLeaves)) {
+    if (FORBIDDEN_PROTOCOL.test(specifier) || path.isAbsolute(specifier)) {
+      throw new HubError("PROFILE_PREFLIGHT_FAILED", `Host override/resolution 包含本地路径：${hostRoot}`, 409);
+    }
+  }
+  const patchedDependencies = pnpmRecord?.patchedDependencies;
+  if (patchedDependencies === undefined) return;
+  if (!patchedDependencies || typeof patchedDependencies !== "object" || Array.isArray(patchedDependencies)) {
+    throw new HubError("PROFILE_PREFLIGHT_FAILED", `Host patchedDependencies 格式无效：${hostRoot}`, 409);
+  }
+  for (const patchPath of Object.values(patchedDependencies)) {
+    if (typeof patchPath !== "string") {
+      throw new HubError("PROFILE_PREFLIGHT_FAILED", `Host patch 路径格式无效：${hostRoot}`, 409);
+    }
+    const relative = safeRelative(patchPath, "Host patch 路径");
+    const absolute = path.join(hostRoot, relative);
+    if (!isInside(hostRoot, absolute) || !existsSync(absolute) || !lstatSync(absolute).isFile()) {
+      throw new HubError("PROFILE_PREFLIGHT_FAILED", `Host patch 文件缺失或不是普通文件：${relative}`, 409);
+    }
+  }
+}
+
+function scanDependencyConfiguration(root: string, trustedHostRoots: readonly string[]): void {
+  const trustedRoots = new Set(trustedHostRoots.map((item) => path.resolve(item)));
   const visit = (directory: string) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (["node_modules", ".git", "dist"].includes(entry.name)) continue;
@@ -315,12 +353,18 @@ function scanDependencyConfiguration(root: string): void {
       if (entry.name === "package.json") {
         const packageJson = readJson(absolute);
         const pnpm = packageJson.pnpm;
+        const isTrustedHostRoot = trustedRoots.has(path.resolve(directory));
         if (
           packageJson.overrides !== undefined
           || packageJson.resolutions !== undefined
           || (pnpm && typeof pnpm === "object" && !Array.isArray(pnpm) && (pnpm as Record<string, unknown>).overrides !== undefined)
         ) {
-          throw new HubError("PROFILE_PREFLIGHT_FAILED", `依赖配置包含 override/resolution：${absolute}`, 409);
+          if (!isTrustedHostRoot) {
+            throw new HubError("PROFILE_PREFLIGHT_FAILED", `插件或嵌套依赖配置包含 override/resolution：${absolute}`, 409);
+          }
+          assertTrustedHostDependencyPolicy(packageJson, directory);
+        } else if (isTrustedHostRoot) {
+          assertTrustedHostDependencyPolicy(packageJson, directory);
         }
         for (const section of dependencySections(packageJson)) {
           for (const specifier of Object.values(section)) {
@@ -329,8 +373,8 @@ function scanDependencyConfiguration(root: string): void {
             }
           }
         }
-      } else if (/^\s*(?:overrides|patchedDependencies):/mu.test(text)) {
-        throw new HubError("PROFILE_PREFLIGHT_FAILED", `pnpm 配置包含 override/patch：${absolute}`, 409);
+      } else if (/^\s*(?:overrides|patchedDependencies):/mu.test(text) && !trustedRoots.has(path.resolve(directory))) {
+        throw new HubError("PROFILE_PREFLIGHT_FAILED", `插件或嵌套 pnpm 配置包含 override/patch：${absolute}`, 409);
       }
     }
   };
@@ -592,7 +636,9 @@ export class PnhProfileAssembly {
       }
       const document = readJson(evidencePath) as unknown as AssemblyEvidenceDocument;
       this.#assertEvidenceIdentity(definition, document);
-      scanDependencyConfiguration(assembly.outputRoot);
+      scanDependencyConfiguration(assembly.outputRoot, Object.values(assembly.roleDirectories).map(
+        (directory) => path.join(assembly.outputRoot, directory),
+      ));
       const registry = assembly.registryPackages.map((item) => verifyRegistryPackage(
         assembly.outputRoot,
         path.join(assembly.outputRoot, assembly.roleDirectories[item.serviceRole]!),
@@ -636,7 +682,9 @@ export class PnhProfileAssembly {
         mkdirSync(path.dirname(target), { recursive: true });
         cpSync(source, target, { recursive: true, dereference: false, errorOnExist: true, force: false });
       }
-      scanDependencyConfiguration(assembly.outputRoot);
+      scanDependencyConfiguration(assembly.outputRoot, Object.values(assembly.roleDirectories).map(
+        (directory) => path.join(assembly.outputRoot, directory),
+      ));
       if (assembly.installDependencies) {
         for (const directory of new Set(Object.values(assembly.roleDirectories))) {
           const cwd = path.join(assembly.outputRoot, directory);

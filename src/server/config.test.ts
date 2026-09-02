@@ -206,12 +206,18 @@ describe("services.json", () => {
     expect(releaseWebArgs?.filter((argument) => argument === "--host")).toHaveLength(1);
     expect(releaseWebArgs?.filter((argument) => argument === "--port")).toHaveLength(1);
     expect(services.find((service) => service.id === "admin-release-api")).toMatchObject({
-      command: { env: {
-        PAH_SERVER_PORT: "8201",
-        PAH_DB_DATABASE: "phoenix_admin_release_validation",
-        PAH_DB_SYNCHRONIZE: "false",
-        PAH_DB_INITIALIZE: "false",
-      } },
+      command: {
+        args: ["dev:plugin-installer"],
+        env: {
+          PAH_SERVER_PORT: "8201",
+          PAH_DB_DATABASE: "phoenix_admin_release_validation",
+          PAH_DB_SYNCHRONIZE: "false",
+          PAH_DB_INITIALIZE: "false",
+          PAH_LOCAL_PACKAGE_MODE: "true",
+          PHOENIX_ADMIN_NODE_ROOT: ".",
+          PHOENIX_ADMIN_VUE_ROOT: "../vue",
+        },
+      },
       endpoints: [{ port: 8201 }],
     });
     expect(services.find((service) => service.id === "cool-admin-midway4-web")).toMatchObject({
@@ -277,6 +283,28 @@ describe("services.json", () => {
       /精确 allowlist 授权当前验收数据库名/,
     );
 
+    const expandedAllowlist = structuredClone(loadTestConfiguration().source) as any;
+    expandedAllowlist.series[0].profiles[1].policy.database.preflight.creation.allowedDatabaseNames = [
+      "phoenix_admin_release_validation",
+      "another_release_validation_20260804",
+    ];
+    expect(() => parseServiceConfigurationDocument(expandedAllowlist, projectRoot)).toThrow(
+      /精确 allowlist 授权当前验收数据库名/,
+    );
+
+    const missingMaintenanceForbidden = structuredClone(loadTestConfiguration().source) as any;
+    missingMaintenanceForbidden.series[0].profiles[1].policy.database.forbiddenNames = [
+      "phoenix_admin",
+      "template0",
+      "template1",
+      "phoenix_admin_development",
+      "phoenix_admin_preproduction",
+      "phoenix_admin_production",
+    ];
+    expect(() => parseServiceConfigurationDocument(missingMaintenanceForbidden, projectRoot)).toThrow(
+      /缺少共享或维护数据库：postgres/,
+    );
+
     const unsafeRelation = structuredClone(loadTestConfiguration().source) as any;
     unsafeRelation.series[0].profiles[1].policy.database.preflight.requiredRelations = [
       "task_info; DROP DATABASE postgres",
@@ -290,6 +318,92 @@ describe("services.json", () => {
     expect(() => parseServiceConfigurationDocument(unknownStatus, projectRoot)).toThrow(
       /provisional 或 versioned-manifest/,
     );
+  });
+
+  it("Phoenix Admin 发布验收 API 必须完整固定安全 spawn 契约", () => {
+    const source = () => structuredClone(loadTestConfiguration().source) as any;
+    const api = (document: any) => document.series[0].profiles[1].services.api;
+    const expectInvalid = (mutate: (service: any) => void, pattern: RegExp) => {
+      const document = source();
+      mutate(api(document));
+      expect(() => parseServiceConfigurationDocument(document, projectRoot)).toThrow(pattern);
+    };
+
+    expectInvalid((service) => {
+      service.command.args = ["dev"];
+    }, /pnpm dev:plugin-installer/);
+    expectInvalid((service) => {
+      service.command.env.PORT = "8201";
+      delete service.command.env.PAH_SERVER_PORT;
+    }, /普通 PORT 不能替代/);
+    expectInvalid((service) => {
+      service.command.env.PAH_SERVER_PORT = "8101";
+    }, /必须与受控 endpoint 端口一致/);
+    for (const [name, pattern] of [
+      ["PAH_DB_DATABASE", /PAH_DB_DATABASE/],
+      ["PAH_DB_SYNCHRONIZE", /synchronize/],
+      ["PAH_DB_INITIALIZE", /initialize/],
+      ["PAH_LOCAL_PACKAGE_MODE", /PAH_LOCAL_PACKAGE_MODE/],
+    ] as const) {
+      expectInvalid((service) => {
+        delete service.command.env[name];
+      }, pattern);
+    }
+    for (const [name, value, pattern] of [
+      ["PAH_DB_DATABASE", "phoenix_admin", /PAH_DB_DATABASE/],
+      ["PAH_DB_SYNCHRONIZE", "true", /synchronize/],
+      ["PAH_DB_INITIALIZE", "true", /initialize/],
+      ["PAH_LOCAL_PACKAGE_MODE", "false", /PAH_LOCAL_PACKAGE_MODE/],
+    ] as const) {
+      expectInvalid((service) => {
+        service.command.env[name] = value;
+      }, pattern);
+    }
+    expectInvalid((service) => {
+      delete service.command.env.PHOENIX_ADMIN_NODE_ROOT;
+    }, /PHOENIX_ADMIN_NODE_ROOT/);
+    expectInvalid((service) => {
+      service.command.env.PHOENIX_ADMIN_NODE_ROOT = "../vue";
+    }, /PHOENIX_ADMIN_NODE_ROOT/);
+    expectInvalid((service) => {
+      delete service.command.env.PHOENIX_ADMIN_VUE_ROOT;
+    }, /PHOENIX_ADMIN_VUE_ROOT/);
+    expectInvalid((service) => {
+      service.command.env.PHOENIX_ADMIN_VUE_ROOT = ".";
+    }, /PHOENIX_ADMIN_VUE_ROOT/);
+  });
+
+  it("同一 Admin Series 的发布验收 Profile 必须互相禁止数据库", () => {
+    const document = structuredClone(loadTestConfiguration().source) as any;
+    const install = document.series[0].profiles[1];
+    const restore = structuredClone(install);
+    restore.id = "restore-validation";
+    restore.name = "Restore Validation";
+    restore.runtimeSlot = "phoenix-admin-restore-validation";
+    restore.policy.database.name = "phoenix_admin_restore_validation";
+    restore.policy.database.preflight.creation.allowedDatabaseNames = ["phoenix_admin_restore_validation"];
+    restore.policy.assembly.outputRoot = ".runtime/assemblies/admin-restore-validation";
+    restore.services.api.id = "admin-restore-api";
+    restore.services.api.command.env.PAH_DB_DATABASE = "phoenix_admin_restore_validation";
+    restore.services.api.command.env.PAH_SERVER_PORT = "8301";
+    restore.services.api.endpoints[0].port = 8301;
+    restore.services.api.endpoints[0].openUrl = "http://127.0.0.1:8301/";
+    restore.services.api.endpoints[0].healthUrl = "http://127.0.0.1:8301/index.html";
+    restore.services.web.id = "admin-restore-web";
+    restore.services.web.command.args = ["dev", "--host", "127.0.0.1", "--strictPort", "--port", "9201"];
+    restore.services.web.command.env.PAH_API_TARGET = "http://127.0.0.1:8301";
+    restore.services.web.command.env.VITE_PAH_API_TARGET = "http://127.0.0.1:8301";
+    restore.services.web.endpoints[0].port = 9201;
+    restore.services.web.endpoints[0].openUrl = "http://127.0.0.1:9201/";
+    restore.services.web.endpoints[0].healthUrl = "http://127.0.0.1:9201/";
+    document.series[0].profiles.push(restore);
+
+    expect(() => parseServiceConfigurationDocument(document, projectRoot)).toThrow(
+      /必须禁止其他发布验收数据库：phoenix_admin_restore_validation/,
+    );
+    install.policy.database.forbiddenNames.push("phoenix_admin_restore_validation");
+    restore.policy.database.forbiddenNames.push("phoenix_admin_release_validation");
+    expect(() => parseServiceConfigurationDocument(document, projectRoot)).not.toThrow();
   });
 
   it("合并公共模板与多版本覆盖，并以数组整体替换", () => {

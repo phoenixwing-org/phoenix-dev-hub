@@ -18,13 +18,14 @@
     "typecheck": "pnpm verify:wing && vue-tsc -p tsconfig.app.json --noEmit --pretty false && tsc -p tsconfig.server.json --noEmit --pretty false",
     "test": "pnpm verify:wing && vitest run",
     "admin:release:reset": "node scripts/reset-release-validation-admin.mjs",
+    "admin:incident:rebuild": "node scripts/rebuild-incident-admin-database.mjs",
     "verify:wing": "node scripts/verify-wing-registry.mjs",
     "verify": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
     "element-plus": "2.14.2",
     "pg": "8.22.0",
-    "phoenix-wing": "0.7.1",
+    "phoenix-wing": "0.7.2",
     "pinia": "3.0.4",
     "vue": "3.5.39"
   },

@@ -14,6 +14,7 @@ import type {
   ServiceSourceDefinition,
 } from "../shared/contracts.js";
 import { HubError } from "./errors.js";
+import { assertPhoenixAdminReleaseValidationSpawnContract } from "./PnhReleaseValidationSpawnContract.js";
 
 const ID_PATTERN = /^[a-z][a-z0-9-]{1,63}$/;
 const ENV_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
@@ -363,6 +364,9 @@ function parseProfilePolicy(
   if (!Array.isArray(forbiddenNames) || !forbiddenNames.every((item) => typeof item === "string" && /^[a-z][a-z0-9_]{0,62}$/.test(item))) {
     throw new HubError("INVALID_CONFIG", `${label}.database.forbiddenNames 不合法`, 500);
   }
+  if (new Set(forbiddenNames).size !== forbiddenNames.length) {
+    throw new HubError("INVALID_CONFIG", `${label}.database.forbiddenNames 不允许重复`, 500);
+  }
   if (forbiddenNames.includes(databaseName)) {
     throw new HubError("INVALID_CONFIG", `${label} 数据库命中禁止名单：${databaseName}`, 500);
   }
@@ -439,10 +443,10 @@ function parseProfilePolicy(
       const allowedDatabaseNames = value.database.preflight.creation.allowedDatabaseNames;
       if (
         !Array.isArray(allowedDatabaseNames)
-        || allowedDatabaseNames.length === 0
+        || allowedDatabaseNames.length !== 1
         || !allowedDatabaseNames.every((item) => typeof item === "string" && /^[a-z][a-z0-9_]{0,62}$/.test(item))
         || new Set(allowedDatabaseNames).size !== allowedDatabaseNames.length
-        || !allowedDatabaseNames.includes(databaseName)
+        || allowedDatabaseNames[0] !== databaseName
       ) {
         throw new HubError(
           "INVALID_CONFIG",
@@ -477,6 +481,23 @@ function parseProfilePolicy(
       `${label} 的 release-validation 必须配置本机 PostgreSQL spawn 前 preflight`,
       500,
     );
+  }
+  if (environmentKind === "release-validation" && databasePreflight) {
+    const requiredForbiddenNames = new Set([
+      "phoenix_admin",
+      "postgres",
+      "template0",
+      "template1",
+      databasePreflight.maintenanceDatabase,
+    ]);
+    const missing = [...requiredForbiddenNames].filter((name) => !forbiddenNames.includes(name));
+    if (missing.length > 0) {
+      throw new HubError(
+        "INVALID_CONFIG",
+        `${label}.database.forbiddenNames 缺少共享或维护数据库：${missing.join("、")}`,
+        500,
+      );
+    }
   }
 
   let assembly: ServiceProfilePolicy["assembly"];
@@ -658,6 +679,23 @@ export function resolveServiceConfiguration(
       throw new HubError("INVALID_CONFIG", `Series ID 重复：${series.id}`, 500);
     }
     seriesIds.add(series.id);
+    const isolatedProfiles = series.profiles.filter((profile) => (
+      profile.policy?.environmentKind === "release-validation"
+    ));
+    for (const profile of isolatedProfiles) {
+      const forbidden = new Set(profile.policy!.database.forbiddenNames ?? []);
+      const missing = isolatedProfiles
+        .filter((candidate) => candidate.id !== profile.id)
+        .map((candidate) => candidate.policy!.database.name)
+        .filter((databaseName) => !forbidden.has(databaseName));
+      if (missing.length > 0) {
+        throw new HubError(
+          "INVALID_CONFIG",
+          `series ${series.id}/profile ${profile.id} 必须禁止其他发布验收数据库：${missing.join("、")}`,
+          500,
+        );
+      }
+    }
     for (const profile of series.profiles) {
       const roles = new Set([
         ...Object.keys(series.template.services),
@@ -722,7 +760,7 @@ export function resolveServiceConfiguration(
         }
         serviceIds.add(definition.id);
         serviceCount += 1;
-        definitions.push({
+        const decoratedDefinition: ServiceDefinition = {
           ...definition,
           seriesId: series.id,
           seriesName: series.name,
@@ -734,7 +772,9 @@ export function resolveServiceConfiguration(
           profilePolicy: profile.policy,
           startOrder: merged.startOrder ?? definition.startOrder ?? 0,
           ...(configurationErrors.length > 0 ? { configurationErrors } : {}),
-        });
+        };
+        assertPhoenixAdminReleaseValidationSpawnContract(decoratedDefinition);
+        definitions.push(decoratedDefinition);
       }
       if (serviceCount === 0) {
         throw new HubError("INVALID_CONFIG", `series ${series.id}/profile ${profile.id} 至少需要一个服务`, 500);

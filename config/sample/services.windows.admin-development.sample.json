@@ -35,7 +35,10 @@
           "id": "inprocess",
           "name": "Admin 进行中",
           "runtimeSlot": "phoenix-admin-inprocess",
-          "metadata": { "description": "独立 inprocess 工作树；通过本机链接消费进行中的插件工作树" },
+          "metadata": {
+            "description": "独立 inprocess 工作树；通过本机链接消费进行中的插件工作树",
+            "wingVersion": "LOCAL in-progress（不得作为 Registry 证据）"
+          },
           "services": {
             "web": { "id": "admin-inprocess-web", "cwd": "E:\\phoenix\\.worktrees\\inprocess\\vue" },
             "api": { "id": "admin-inprocess-api", "cwd": "E:\\phoenix\\.worktrees\\inprocess\\node" }
@@ -45,7 +48,11 @@
           "id": "stable-test",
           "name": "Admin 稳定测试",
           "runtimeSlot": "phoenix-admin-stable-test",
-          "metadata": { "description": "主工作目录；通过 Hub 受控挂载主库插件" },
+          "metadata": {
+            "description": "主工作目录；通过 Hub 受控挂载主库插件",
+            "wingVersion": "Registry 0.7.2=7563cba",
+            "sourceBaseline": "phoenix-wing develop@7563cbacee1562ae4861e218daf3ea7517844210"
+          },
           "services": {
             "web": {
               "id": "admin-stable-test-web",

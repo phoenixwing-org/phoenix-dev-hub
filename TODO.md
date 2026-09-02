@@ -2,13 +2,13 @@
 
 状态：当前开发清单
 
-## Wing 0.6.0 基线
+## Wing 0.7.2 基线
 
-- [x] Hub Web 工作台的目标依赖固定为 `phoenix-wing@0.6.0`，不跟随 Wing 的 `develop` 分支。
+- [x] Hub Web 工作台的目标依赖固定为 `phoenix-wing@0.7.2`，不跟随 Wing 的 `develop` 分支。
 - [x] 默认开发、类型检查、测试与构建使用 Registry 依赖；Hub 不自动跟随 Wing 升级，开发者必须主动更新精确版本。
 - [x] Hub 不提供 Wing 本地源码模式，开发服务器、测试和生产构建只从 Registry 包解析。
 - [x] 未使用 `pnpm link`、`file:`、`workspace:` 或 override，也没有相邻源码静默回退。
-- [x] 使用 Registry `phoenix-wing@0.6.0` 生成干净锁文件，并完成正式依赖门禁、测试、类型检查与生产构建。
+- [x] 使用 Registry `phoenix-wing@0.7.2` 生成干净锁文件，并完成正式依赖门禁、测试、类型检查与生产构建。
 
 ## Hub 本机控制层
 

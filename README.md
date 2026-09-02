@@ -13,7 +13,7 @@ Phoenix Hub 是 Phoenix 工作区内开发服务的本机控制台。它用一�
 
 ```text
 http://127.0.0.1:42100
-├─ Wing 0.7.1 Web 工作台
+├─ Wing Registry 0.7.2 Web 工作台
 ├─ /api/services：探测、启动、停止、重启
 ├─ /api/services/:id/logs：按 generation/cursor 增量读取最近日志
 ├─ /api/services/:id/terminal：打开本机系统终端
@@ -66,14 +66,20 @@ http://127.0.0.1:42100
 - [Admin 系列多环境 Profile 点检](docs/Admin系列多环境配置档点检.md)
 - [后续任务清单](TODO.md)
 
-## Wing 0.7.1 依赖策略
+## Wing 0.7.2 依赖策略
 
 Hub 正式依赖只声明并锁定 npm Registry 的精确版本
-`phoenix-wing@0.7.1`。默认开发、类型检查、测试与构建均从安装后的 Registry 包
+`phoenix-wing@0.7.2`，对应发布源码 `develop@7563cbacee1562ae4861e218daf3ea7517844210`。
+默认开发、类型检查、测试与构建均从安装后的 Registry 包
 解析，不自动跟随相邻 Wing 仓库，开发者需要升级时必须主动修改精确版本并重新验证。
 Hub 不提供 Wing 本地源码模式；开发服务器、测试与生产构建均只从 Registry 包
 解析。不得使用 `link:`、`file:`、`workspace:`、插件或嵌套 override，或相邻源码回退；冻结
 Host 自身已归档的 override/patch 由 package assembly 按精确提交和安全路径单独校验。
+
+`pnpm dev` 只开发 Hub 自身，也必须使用上述 Registry 依赖。本机用户配置可以为
+“Admin 进行中”服务显式注入 `PHOENIX_WING_ROOT`，但该服务只能标记为
+`LOCAL in-progress`，不得作为 Hub、稳定服务或正式装配的 Registry 证据。稳定线统一标记为
+`Registry 0.7.2=7563cba`。
 
 ## 开发与构建
 
@@ -193,9 +199,10 @@ Phoenix Admin Development 的 sample 命令保持为纯 `pnpm dev`，数据库�
 包 SHA、Registry integrity 与路径只允许进入 `services.user.json` 或 `.runtime` 本机配置，连接串、token、
 密码和备份路径不得进入 Git。
 
-Admin 开发联调中，Web 使用 `pnpm dev:local` 消费相邻本地 Wing；它是 Admin 提供的
-`dev:wing-local` 便捷别名。API 仍使用普通 `pnpm dev`。这不改变 Hub 自身对 Registry
-Wing 0.7.1 的锁定。
+仅“Admin 进行中”本机配置允许 Web 使用 `pnpm dev:local` 和显式 `PHOENIX_WING_ROOT`
+消费对应进行中 Wing worktree；它是 Admin 提供的 `dev:wing-local` 便捷别名。稳定 Admin Web
+与 Hub 自身均使用普通 `pnpm dev` 和 Registry `phoenix-wing@0.7.2`。进行中本地源码证据与
+`Registry 0.7.2=7563cba` 正式证据不得混用。
 
 发布验收管理员重置是独立、操作员显式执行的本机工具，不是普通 start 的副作用：
 

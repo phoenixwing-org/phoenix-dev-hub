@@ -54,7 +54,9 @@
           "name": "Admin 开发联调",
           "runtimeSlot": "phoenix-admin-development",
           "metadata": {
-            "description": "相邻源码工作区 / dev-only"
+            "description": "稳定主工作区；只使用 Registry 精确依赖",
+            "wingVersion": "Registry 0.7.2=7563cba",
+            "sourceBaseline": "phoenix-wing develop@7563cbacee1562ae4861e218daf3ea7517844210"
           },
           "services": {
             "web": {
@@ -72,7 +74,9 @@
           "name": "Admin 发布验收环境（非正式）",
           "runtimeSlot": "phoenix-admin-release-validation",
           "metadata": {
-            "description": "独立 Git worktree Host / package-assembled / registry-only"
+            "description": "独立 Git worktree Host / package-assembled / registry-only",
+            "wingVersion": "Registry 0.7.2=7563cba",
+            "sourceBaseline": "phoenix-wing develop@7563cbacee1562ae4861e218daf3ea7517844210"
           },
           "policy": {
             "environmentKind": "release-validation",
@@ -82,6 +86,10 @@
               "envName": "PAH_DB_DATABASE",
               "name": "phoenix_admin_release_validation",
               "forbiddenNames": [
+                "postgres",
+                "template0",
+                "template1",
+                "phoenix_admin",
                 "phoenix_admin_development",
                 "phoenix_admin_preproduction",
                 "phoenix_admin_production"
@@ -128,8 +136,8 @@
                 {
                   "serviceRole": "web",
                   "name": "phoenix-wing",
-                  "version": "0.6.2",
-                  "integrity": "sha512-sPNU/+erS5gaHTCOpSCRrwiG6b7blQ98XskzFTUfXLmFwxgciUiRfwyZxhsQOsjC/xBbjWgrAojpTX9tofl1mQ=="
+                  "version": "0.7.2",
+                  "integrity": "sha512-/o89wI0Rj6xUXh6JQBnJDOvRnf/SlA1+Uwv/BnhNVUuRWB5SZhXVp/JhcIYNeNluMLA/ozTDA2pIBnwBiS7rSA=="
                 }
               ],
               "installDependencies": true
@@ -162,11 +170,15 @@
               "name": "Phoenix Admin 发布验收 API",
               "description": "独立 worktree Host、数据库与 8201 端口",
               "command": {
+                "args": ["dev:plugin-installer"],
                 "env": {
                   "PAH_SERVER_PORT": "8201",
                   "PAH_DB_DATABASE": "phoenix_admin_release_validation",
                   "PAH_DB_SYNCHRONIZE": "false",
-                  "PAH_DB_INITIALIZE": "false"
+                  "PAH_DB_INITIALIZE": "false",
+                  "PAH_LOCAL_PACKAGE_MODE": "true",
+                  "PHOENIX_ADMIN_NODE_ROOT": ".",
+                  "PHOENIX_ADMIN_VUE_ROOT": "../vue"
                 }
               },
               "endpoints": [

@@ -41,14 +41,21 @@ ledger 写入绕过 Pah 生命周期。
 4. `requiredRelationsStatus=versioned-manifest`，清单逐字取自冻结 Admin Node
    `host-baseline.json`，不得手写子集；
 5. `creation.allowedDatabaseNames` 只包含当前 Profile 的精确数据库名；
-6. `PAH_DB_SYNCHRONIZE=false`、`PAH_DB_INITIALIZE=false`；
-7. package assembly 只写 Hub `.runtime/assemblies/<profile>`，不修改 Host 输入工作树；
-8. package metadata 的 Host peer range 必须包含冻结 Host 的真实版本。源码 typecheck 不能替代
-   不可变包的兼容性验包。
+6. API 必须由 Hub 执行 `pnpm dev:plugin-installer`，不得用手工 `pnpm dev` 充当发布验收证据；
+7. `PAH_SERVER_PORT` 必须显式等于当前 API endpoint；普通 `PORT` 不能替代；
+8. `PAH_DB_DATABASE` 必须等于 Profile 冻结库名，且显式固定
+   `PAH_DB_SYNCHRONIZE=false`、`PAH_DB_INITIALIZE=false`、`PAH_LOCAL_PACKAGE_MODE=true`；
+9. `PHOENIX_ADMIN_NODE_ROOT` 与 `PHOENIX_ADMIN_VUE_ROOT` 必须从 API cwd 精确解析到当前
+   assembly 的 Node/Vue 根；缺失、越界或指向上一轮 assembly 均在 spawn 前阻断；
+10. package assembly 只写 Hub `.runtime/assemblies/<profile>`，不修改 Host 输入工作树；
+11. package metadata 的 Host peer range 必须包含冻结 Host 的真实版本。源码 typecheck 不能替代
+   不可变包的兼容性验包；装配器必须逐项读取 `node_modules` 的实际解析版本，不能只确认 Host
+   `package.json` 存在同名声明，也不能只校验单独列入 `registryPackages` 的依赖。
 
 Hub 写入的数据库创建 evidence 位于 `.runtime/database-evidence/`，临时文件和最终文件均为
 `0600`；assembly evidence 同样为 `0600` 且采用 no-replace。evidence 不保存数据库密码、登录
-密码或连接串。
+密码或连接串。assembly evidence v2 逐项冻结 Host peer 的角色、名称、实际版本、要求范围和
+assembly 内 realpath；旧 v1 evidence 缺少这些证据，升级后按无效处理，必须重新装配。
 
 ## 状态机与操作边界
 
@@ -68,6 +75,8 @@ configured
 
 - 普通“启动”只允许在数据库 preflight 和 package assembly 均 ready 后派生进程；不自动建库、
   建表、seed、安装插件或恢复备份。
+- Hub 在配置解析和最终 child process spawn 前各校验一次同一安全契约；父进程环境、运行时注入
+  或普通 `PORT` 均不得覆盖冻结的端口、数据库、关闭初始化标志和 package roots。
 - Hub 的“创建隔离数据库”要求精确确认文本
   `create-release-validation-database:<database>`；创建前后都重新检查存在性。
 - Host 空库基线由冻结 Admin Node 的 `pnpm host:baseline` 执行 plan → apply → verify；插件不拥有
@@ -95,7 +104,12 @@ configured
 ## 硬门禁
 
 - 两个 Profile 配置解析无错误，且端口、数据库、cwd、assembly root 冲突均 fail-closed；
-- package SHA、manifest/integrity、Host commit、Registry realpath 和 peer range 任一不匹配即阻断；
+- 两个数据库的创建 allowlist 各自只能有一个精确目标；两库必须互列 forbidden，并共同禁止
+  `phoenix_admin`、maintenance database、clean-validation、preproduction 和 production 数据库；
+- `PAH_SERVER_PORT`、`PAH_DB_DATABASE`、同步/初始化关闭标志、本地包模式或 Node/Vue package roots
+  任一缺失或不一致，必须在 child process spawn 前阻断；普通 `PORT` 不得使门禁通过；
+- package SHA、manifest/integrity、Host commit、Registry realpath、全部 Host peer 的实际解析版本和
+  peer range 任一不匹配即阻断；
 - 数据库缺失或缺少 versioned Host baseline 时不启动 API/Web；
 - install/restore 证据不得混用，所有 evidence 与 secret 权限必须为 `0600`；
 - 未完成 dry-run、可信备份/恢复要求或 migration 校验时不得执行安装；

@@ -31,7 +31,11 @@ function createHost(
 ): string {
   mkdirSync(root, { recursive: true });
   const dependencies = runtime === "vue"
-    ? { "phoenix-wing": "0.6.2", ...(localDependency ? { local: "file:../local" } : {}) }
+    ? {
+        "@element-plus/icons-vue": "2.3.1",
+        "phoenix-wing": "0.6.2",
+        ...(localDependency ? { local: "file:../local" } : {}),
+      }
     : {};
   const packageJson: Record<string, unknown> = { name: `${runtime}-host`, private: true, dependencies };
   if (trustedHostPolicy) {
@@ -56,18 +60,27 @@ function createHost(
     "  .:",
     "    dependencies:",
     ...(runtime === "vue" ? [
+      "      '@element-plus/icons-vue':",
+      "        specifier: 2.3.1",
+      "        version: 2.3.1",
       "      phoenix-wing:",
       "        specifier: 0.6.2",
       "        version: 0.6.2",
     ] : []),
     "packages:",
     ...(runtime === "vue" ? [
+      "  '@element-plus/icons-vue@2.3.1':",
+      "    resolution: {integrity: sha512-aWNvbnM=}",
       "  phoenix-wing@0.6.2:",
       `    resolution: {integrity: ${wingIntegrity}}`,
     ] : []),
     "",
   ].join("\n"));
   if (runtime === "vue") {
+    writeJson(path.join(root, "node_modules/@element-plus/icons-vue/package.json"), {
+      name: "@element-plus/icons-vue",
+      version: "2.3.1",
+    });
     writeJson(path.join(root, "node_modules/phoenix-wing/package.json"), {
       name: "phoenix-wing",
       version: "0.6.2",
@@ -85,6 +98,7 @@ function createPackage(
   root: string,
   wingPeer = ">=0.6.2 <0.7.0",
   payloadOverride = false,
+  additionalPeers: Readonly<Record<string, string>> = {},
 ): string {
   const stage = path.join(root, "package-stage");
   mkdirSync(stage, { recursive: true });
@@ -96,7 +110,7 @@ function createPackage(
     manifest: "manifest.json",
     integrity: "integrity.json",
     source: { commit: "a".repeat(40), dirty: false },
-    hostCompatibility: { peerDependencies: { "phoenix-wing": wingPeer } },
+    hostCompatibility: { peerDependencies: { "phoenix-wing": wingPeer, ...additionalPeers } },
     installerCompatibility: { pahBusinessModule: true, coolNativeHook: false },
     payloads: [
       { runtime: "node", source: "payload/node/sample-plugin", target: "src/modules/sample-plugin" },
@@ -151,6 +165,7 @@ function fixture(
   wingPeer?: string,
   trustedHostPolicy = false,
   payloadOverride = false,
+  additionalPeers: Readonly<Record<string, string>> = {},
 ) {
   const root = mkdtempSync(path.join(tmpdir(), "pnh-profile-assembly-"));
   roots.push(root);
@@ -158,7 +173,7 @@ function fixture(
   const vueHost = path.join(root, "vue-host");
   const nodeCommit = createHost(nodeHost, "node", false, trustedHostPolicy);
   const vueCommit = createHost(vueHost, "vue", localDependency);
-  const archive = createPackage(root, wingPeer, payloadOverride);
+  const archive = createPackage(root, wingPeer, payloadOverride, additionalPeers);
   const outputRoot = path.join(root, "runtime/assembly");
   const policy: ServiceProfilePolicy = {
     environmentKind: "release-validation",
@@ -228,6 +243,13 @@ describe("PnhProfileAssembly", () => {
     expect(git(value.vueHost, ["status", "--short"])).toBe("");
     expect(await assembly.prepare(value.definitions)).toMatchObject({ state: "verified" });
     expect(assembly.inspect(value.definitions[0]!)).toMatchObject({ state: "verified" });
+    const evidencePath = path.join(value.outputRoot, "assembly-evidence.json");
+    const legacyEvidence = JSON.parse(readFileSync(evidencePath, "utf8")) as Record<string, unknown>;
+    writeJson(evidencePath, { ...legacyEvidence, formatVersion: 1 });
+    expect(assembly.inspect(value.definitions[0]!)).toMatchObject({
+      state: "invalid",
+      message: expect.stringContaining("冻结配置不一致"),
+    });
   });
 
   it("允许冻结 Host 根目录已归档的 override/patch，但拒绝插件 payload 注入", async () => {
@@ -286,5 +308,41 @@ describe("PnhProfileAssembly", () => {
       code: "PROFILE_PREFLIGHT_FAILED",
       message: expect.stringContaining("不满足业务包 Host peer"),
     });
+  });
+
+  it("校验非 Registry Host peer 的 assembly 实际版本并记录 evidence", async () => {
+    const compatible = fixture(false, undefined, false, false, {
+      "@element-plus/icons-vue": ">=2.3.1 <3",
+    });
+    await expect(new PnhProfileAssembly().prepare(compatible.definitions)).resolves.toMatchObject({
+      state: "verified",
+    });
+    const evidence = JSON.parse(readFileSync(
+      path.join(compatible.outputRoot, "assembly-evidence.json"),
+      "utf8",
+    )) as { formatVersion: number; hostPeers: { name: string; version: string; range: string }[] };
+    expect(evidence.formatVersion).toBe(2);
+    expect(evidence.hostPeers).toEqual(expect.arrayContaining([expect.objectContaining({
+      name: "@element-plus/icons-vue",
+      version: "2.3.1",
+      range: ">=2.3.1 <3",
+    })]));
+    writeJson(path.join(
+      compatible.outputRoot,
+      "vue/node_modules/@element-plus/icons-vue/package.json",
+    ), { name: "@element-plus/icons-vue", version: "2.3.0" });
+    expect(new PnhProfileAssembly().inspect(compatible.definitions[0]!)).toMatchObject({
+      state: "invalid",
+      message: expect.stringContaining("Host peer evidence 已变化"),
+    });
+
+    const incompatible = fixture(false, undefined, false, false, {
+      "@element-plus/icons-vue": ">=2.3.2 <3",
+    });
+    await expect(new PnhProfileAssembly().prepare(incompatible.definitions)).rejects.toMatchObject({
+      code: "PROFILE_PREFLIGHT_FAILED",
+      message: expect.stringContaining("@element-plus/icons-vue@2.3.1"),
+    });
+    expect(() => readFileSync(path.join(incompatible.outputRoot, "assembly-evidence.json"))).toThrow();
   });
 });

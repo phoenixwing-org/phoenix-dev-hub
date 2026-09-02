@@ -20,6 +20,7 @@ import { HubError } from "./errors.js";
 import { ServiceLogBuffer } from "./logBuffer.js";
 import { PnhBuildOutputTracker } from "./PnhBuildOutputTracker.js";
 import { PnhProfileAssembly } from "./PnhProfileAssembly.js";
+import { assertPhoenixAdminReleaseValidationSpawnContract } from "./PnhReleaseValidationSpawnContract.js";
 import {
   PnhPostgresPreflight,
   type PnhProfileDatabasePreflight,
@@ -653,13 +654,27 @@ export class PnhServiceManager {
     const logBuffer = this.#logs.get(serviceId)!;
     logBuffer.append("system", `启动：${processCommand(definition)}`);
     const runtimeEnv = await this.#runtimeEnvProvider(definition);
+    const spawnEnvironment = pnhServiceSpawnEnvironment(definition, runtimeEnv);
+    try {
+      assertPhoenixAdminReleaseValidationSpawnContract(
+        definition,
+        spawnEnvironment,
+        "PROFILE_SPAWN_CONTRACT_FAILED",
+      );
+    } catch (error) {
+      logBuffer.append(
+        "system",
+        `[Profile] ${error instanceof Error ? error.message : "spawn 前环境契约失败"}`,
+      );
+      throw error;
+    }
     const controlledToolMessage = pnhControlledToolProfileLogMessage(
       runtimeEnv[PNH_CONTROLLED_TOOL_PROFILE_ENV],
     );
     if (controlledToolMessage) logBuffer.append("system", controlledToolMessage);
     const child = spawn(definition.command.executable, [...definition.command.args], {
       cwd: definition.cwd,
-      env: pnhServiceSpawnEnvironment(definition, runtimeEnv),
+      env: spawnEnvironment,
       detached: process.platform !== "win32",
       shell: PNH_SERVICE_SPAWN_SHELL,
       stdio: ["ignore", "pipe", "pipe"],

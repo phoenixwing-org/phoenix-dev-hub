@@ -41,7 +41,7 @@ interface PackageMetadata {
 }
 
 interface AssemblyEvidenceDocument {
-  readonly formatVersion: 1;
+  readonly formatVersion: 2;
   readonly seriesId: string;
   readonly profileId: string;
   readonly environmentKind: ServiceProfilePolicy["environmentKind"];
@@ -51,6 +51,7 @@ interface AssemblyEvidenceDocument {
   readonly package: { readonly path: string; readonly sha256: string; readonly kind: string; readonly fileCount: number };
   readonly host: { readonly nodeCommit: string; readonly vueCommit: string };
   readonly registryPackages: readonly RegistryEvidence[];
+  readonly hostPeers: readonly HostPeerEvidence[];
   readonly sourceCommit?: string;
   readonly assembledAt: string;
 }
@@ -61,6 +62,14 @@ interface RegistryEvidence {
   readonly version: string;
   readonly integrity: string;
   readonly lockfile: string;
+  readonly realpath: string;
+}
+
+interface HostPeerEvidence {
+  readonly serviceRole: string;
+  readonly name: string;
+  readonly version: string;
+  readonly range: string;
   readonly realpath: string;
 }
 
@@ -455,9 +464,9 @@ function verifyRegistryPackage(
 
 function compareVersion(left: string, right: string): number {
   const parse = (value: string) => {
-    const match = value.match(/^(\d+)\.(\d+)\.(\d+)$/u);
+    const match = value.match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?$/u);
     if (!match) return undefined;
-    return [Number(match[1]), Number(match[2]), Number(match[3])] as const;
+    return [Number(match[1]), Number(match[2] ?? 0), Number(match[3] ?? 0)] as const;
   };
   const leftParts = parse(left);
   const rightParts = parse(right);
@@ -472,10 +481,11 @@ function compareVersion(left: string, right: string): number {
 
 function satisfiesVersionRange(version: string, range: string): boolean {
   return range.split("||").some((alternative) => alternative.trim().split(/\s+/u).every((clause) => {
-    const match = clause.match(/^(>=|<=|>|<|=|\^|~)?(\d+\.\d+\.\d+)$/u);
+    const match = clause.match(/^(>=|<=|>|<|=|\^|~)?(\d+(?:\.\d+){0,2})$/u);
     if (!match) return false;
     const operator = match[1] ?? "=";
     const expected = match[2]!;
+    if (["=", "^", "~"].includes(operator) && expected.split(".").length !== 3) return false;
     const compared = compareVersion(version, expected);
     if (operator === ">=") return compared >= 0;
     if (operator === "<=") return compared <= 0;
@@ -498,24 +508,102 @@ function verifyHostPeers(
   metadata: PackageMetadata,
   assembly: ServiceProfileAssemblyPolicy,
   assemblyRoot: string,
-): void {
+): readonly HostPeerEvidence[] {
   const peerDependencies = metadata.hostCompatibility?.peerDependencies ?? {};
-  for (const [dependency, range] of Object.entries(peerDependencies)) {
-    const present = ["node", "vue"].some((runtime) => {
-      const manifest = readJson(path.join(assemblyRoot, runtime, "package.json"));
-      return dependencySections(manifest).some((section) => section[dependency] !== undefined);
-    });
-    if (!present) {
+  const evidence: HostPeerEvidence[] = [];
+  for (const [dependency, range] of Object.entries(peerDependencies).sort(([left], [right]) => left.localeCompare(right))) {
+    const declaredHosts = Object.entries(assembly.roleDirectories)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .flatMap(([serviceRole, directory]) => {
+        const roleRoot = path.join(assemblyRoot, directory);
+        const manifest = readJson(path.join(roleRoot, "package.json"));
+        const declared = dependencySections(manifest).some((section) => section[dependency] !== undefined);
+        return declared ? [{ serviceRole, roleRoot }] : [];
+      });
+    if (declaredHosts.length === 0) {
       throw new HubError("PROFILE_PREFLIGHT_FAILED", `clean Host 缺少业务包 peerDependency：${dependency}`, 409);
     }
-    const registryPackage = assembly.registryPackages.find((item) => item.name === dependency);
-    if (registryPackage && !satisfiesVersionRange(registryPackage.version, range)) {
-      throw new HubError(
-        "PROFILE_PREFLIGHT_FAILED",
-        `${dependency}@${registryPackage.version} 不满足业务包 Host peer：${range}`,
-        409,
-      );
+    for (const { serviceRole, roleRoot } of declaredHosts) {
+      const manifestPath = packagePath(roleRoot, dependency);
+      if (!existsSync(manifestPath)) {
+        throw new HubError(
+          "PROFILE_PREFLIGHT_FAILED",
+          `${serviceRole} 声明了业务包 peerDependency，但 assembly node_modules 未解析：${dependency}`,
+          409,
+        );
+      }
+      const resolvedManifest = realpathSync(manifestPath);
+      if (!isInside(realpathSync(assemblyRoot), resolvedManifest)) {
+        throw new HubError(
+          "PROFILE_PREFLIGHT_FAILED",
+          `${dependency} realpath 逃逸 assembly：${resolvedManifest}`,
+          409,
+        );
+      }
+      const installed = readJson(resolvedManifest);
+      if (typeof installed.version !== "string" || !satisfiesVersionRange(installed.version, range)) {
+        throw new HubError(
+          "PROFILE_PREFLIGHT_FAILED",
+          `${serviceRole} 实际解析 ${dependency}@${String(installed.version)}，不满足业务包 Host peer：${range}`,
+          409,
+        );
+      }
+      evidence.push({
+        serviceRole,
+        name: dependency,
+        version: installed.version,
+        range,
+        realpath: path.dirname(resolvedManifest),
+      });
     }
+  }
+  return evidence;
+}
+
+function verifyPersistedHostPeers(
+  assembly: ServiceProfileAssemblyPolicy,
+  assemblyRoot: string,
+  expected: readonly HostPeerEvidence[],
+): void {
+  if (!Array.isArray(expected)) {
+    throw new HubError("PROFILE_PREFLIGHT_FAILED", "assembly evidence 缺少 Host peer 实际版本证据", 409);
+  }
+  const actual = expected.map((item) => {
+    if (
+      !item
+      || typeof item.serviceRole !== "string"
+      || typeof item.name !== "string"
+      || typeof item.version !== "string"
+      || typeof item.range !== "string"
+      || typeof item.realpath !== "string"
+    ) {
+      throw new HubError("PROFILE_PREFLIGHT_FAILED", "assembly Host peer evidence 结构无效", 409);
+    }
+    const directory = assembly.roleDirectories[item.serviceRole];
+    if (!directory) {
+      throw new HubError("PROFILE_PREFLIGHT_FAILED", `assembly Host peer 引用了未知角色：${item.serviceRole}`, 409);
+    }
+    const roleRoot = path.join(assemblyRoot, directory);
+    const rootManifest = readJson(path.join(roleRoot, "package.json"));
+    if (!dependencySections(rootManifest).some((section) => section[item.name] !== undefined)) {
+      throw new HubError("PROFILE_PREFLIGHT_FAILED", `${item.serviceRole} 不再声明 Host peer：${item.name}`, 409);
+    }
+    const resolvedManifest = realpathSync(packagePath(roleRoot, item.name));
+    if (!isInside(realpathSync(assemblyRoot), resolvedManifest)) {
+      throw new HubError("PROFILE_PREFLIGHT_FAILED", `${item.name} realpath 逃逸 assembly：${resolvedManifest}`, 409);
+    }
+    const installed = readJson(resolvedManifest);
+    if (
+      installed.version !== item.version
+      || !satisfiesVersionRange(item.version, item.range)
+      || path.dirname(resolvedManifest) !== item.realpath
+    ) {
+      throw new HubError("PROFILE_PREFLIGHT_FAILED", `${item.name} Host peer evidence 已变化`, 409);
+    }
+    return item;
+  });
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new HubError("PROFILE_PREFLIGHT_FAILED", "assembly Host peer evidence 已变化", 409);
   }
 }
 
@@ -602,6 +690,7 @@ export class PnhProfileAssembly {
       if (JSON.stringify(registry) !== JSON.stringify(document.registryPackages)) {
         throw new HubError("PROFILE_PREFLIGHT_FAILED", "assembly Registry 依赖证据已变化", 409);
       }
+      verifyPersistedHostPeers(policy.assembly!, policy.assembly!.outputRoot, document.hostPeers);
       return publicEvidence(policy, document);
     } catch (error) {
       return {
@@ -649,7 +738,10 @@ export class PnhProfileAssembly {
       }
       const verifiedPackage = await extractAndVerifyPackage(assembly);
       try {
-        verifyHostPeers(verifiedPackage.metadata, assembly, assembly.outputRoot);
+        const hostPeers = verifyHostPeers(verifiedPackage.metadata, assembly, assembly.outputRoot);
+        if (JSON.stringify(hostPeers) !== JSON.stringify(document.hostPeers)) {
+          throw new HubError("PROFILE_PREFLIGHT_FAILED", "assembly Host peer evidence 已变化", 409);
+        }
       } finally {
         rmSync(verifiedPackage.extractedRoot, { recursive: true, force: true });
       }
@@ -697,9 +789,9 @@ export class PnhProfileAssembly {
         path.join(assembly.outputRoot, assembly.roleDirectories[item.serviceRole]!),
         item,
       ));
-      verifyHostPeers(verifiedPackage.metadata, assembly, assembly.outputRoot);
+      const hostPeers = verifyHostPeers(verifiedPackage.metadata, assembly, assembly.outputRoot);
       const document: AssemblyEvidenceDocument = {
-        formatVersion: 1,
+        formatVersion: 2,
         seriesId: definition.seriesId ?? definition.moduleId,
         profileId: definition.profileId ?? "default",
         environmentKind: policy.environmentKind,
@@ -714,6 +806,7 @@ export class PnhProfileAssembly {
         },
         host: { nodeCommit: assembly.nodeHost.commit, vueCommit: assembly.vueHost.commit },
         registryPackages,
+        hostPeers,
         sourceCommit: verifiedPackage.metadata.source?.commit,
         assembledAt: new Date().toISOString(),
       };
@@ -732,7 +825,7 @@ export class PnhProfileAssembly {
     const policy = definition.profilePolicy!;
     const assembly = policy.assembly!;
     if (
-      document.formatVersion !== 1
+      document.formatVersion !== 2
       || document.seriesId !== (definition.seriesId ?? definition.moduleId)
       || document.profileId !== (definition.profileId ?? "default")
       || document.environmentKind !== policy.environmentKind

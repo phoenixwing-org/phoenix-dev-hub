@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -77,6 +77,66 @@ function definition(
       required: true,
     }, ...extraEndpoints],
     externalStop: "confirm-matching-cwd",
+  };
+}
+
+function phoenixAdminReleaseApi(
+  id: string,
+  port: number,
+  root: string,
+): ServiceDefinition {
+  const nodeRoot = path.join(root, "node");
+  const vueRoot = path.join(root, "vue");
+  return {
+    ...definition(id, port, fixturePath, nodeRoot),
+    moduleId: "phoenix-admin",
+    moduleName: "Phoenix Admin",
+    seriesId: "phoenix-admin",
+    seriesName: "Phoenix Admin",
+    profileId: "release-validation",
+    profileName: "Release Validation",
+    serviceRole: "api",
+    runtimeSlot: `${id}-slot`,
+    command: {
+      executable: "pnpm",
+      args: ["dev:plugin-installer"],
+      env: {
+        PAH_SERVER_PORT: String(port),
+        PAH_DB_DATABASE: `${id.replaceAll("-", "_")}_db`,
+        PAH_DB_SYNCHRONIZE: "false",
+        PAH_DB_INITIALIZE: "false",
+        PAH_LOCAL_PACKAGE_MODE: "true",
+        PHOENIX_ADMIN_NODE_ROOT: ".",
+        PHOENIX_ADMIN_VUE_ROOT: "../vue",
+      },
+    },
+    profilePolicy: {
+      environmentKind: "release-validation",
+      deploymentMode: "package-assembled",
+      lifecycleControl: true,
+      database: {
+        serviceRole: "api",
+        envName: "PAH_DB_DATABASE",
+        name: `${id.replaceAll("-", "_")}_db`,
+      },
+      assembly: {
+        outputRoot: root,
+        roleDirectories: { api: "node", web: "vue" },
+        packagePath: path.join(root, "plugin.phoenix.cool"),
+        packageSha256: "0".repeat(64),
+        packageKind: "pah-business-module",
+        moduleId: "fixture-plugin",
+        version: "1.0.0",
+        nodeHost: { root: nodeRoot, commit: "0".repeat(40) },
+        vueHost: { root: vueRoot, commit: "0".repeat(40) },
+        registryPackages: [{
+          serviceRole: "web",
+          name: "phoenix-wing",
+          version: "0.7.2",
+          integrity: "sha512-QUJDRA==",
+        }],
+      },
+    },
   };
 }
 
@@ -743,6 +803,106 @@ describe("PnhServiceManager", () => {
         },
       },
     });
+  });
+
+  it("最终 runtime env 改写冻结端口时在 spawn 前阻断", async () => {
+    const port = await freePort();
+    const root = mkdtempSync(path.join(tmpdir(), "pnh-release-spawn-contract-"));
+    temporaryRoots.push(root);
+    mkdirSync(path.join(root, "node"));
+    mkdirSync(path.join(root, "vue"));
+    const service = phoenixAdminReleaseApi("release-runtime-override", port, root);
+    const databaseEvidence = {
+      state: "ready" as const,
+      databaseName: service.profilePolicy!.database.name,
+      server: "127.0.0.1:5432/postgres",
+      exists: true,
+      message: "fixture ready",
+      checkedAt: new Date().toISOString(),
+    };
+    const manager = new PnhServiceManager(
+      [service],
+      undefined,
+      () => ({ PAH_SERVER_PORT: String(port + 1) }),
+      {
+        inspect: () => ({
+          state: "verified",
+          environmentKind: "release-validation",
+          deploymentMode: "package-assembled",
+          message: "fixture assembly verified",
+          databaseName: databaseEvidence.databaseName,
+        }),
+        prepare: vi.fn().mockResolvedValue(undefined),
+      },
+      {
+        inspect: vi.fn().mockResolvedValue(databaseEvidence),
+        assertReady: vi.fn().mockResolvedValue(databaseEvidence),
+      },
+    );
+    managers.push(manager);
+
+    await expect(manager.start(service.id)).rejects.toMatchObject({
+      code: "PROFILE_SPAWN_CONTRACT_FAILED",
+      message: expect.stringContaining("PAH_SERVER_PORT"),
+    });
+    expect((await manager.logs(service.id)).entries.some((entry) => (
+      entry.text.includes("spawn 前") || entry.text.includes("PAH_SERVER_PORT")
+    ))).toBe(true);
+    expect((await manager.status(service.id)).lifecycle).toBe("stopped");
+  });
+
+  it("最终 runtime env 只有普通 PORT 时不能冒充 PAH_SERVER_PORT", async () => {
+    const port = await freePort();
+    const root = mkdtempSync(path.join(tmpdir(), "pnh-release-port-alias-"));
+    temporaryRoots.push(root);
+    mkdirSync(path.join(root, "node"));
+    mkdirSync(path.join(root, "vue"));
+    const base = phoenixAdminReleaseApi("release-port-alias", port, root);
+    const service: ServiceDefinition = {
+      ...base,
+      command: {
+        ...base.command,
+        env: {
+          ...base.command.env,
+          PAH_SERVER_PORT: undefined as unknown as string,
+          PORT: String(port),
+        },
+      },
+    };
+    const databaseEvidence = {
+      state: "ready" as const,
+      databaseName: service.profilePolicy!.database.name,
+      server: "127.0.0.1:5432/postgres",
+      exists: true,
+      message: "fixture ready",
+      checkedAt: new Date().toISOString(),
+    };
+    const manager = new PnhServiceManager(
+      [service],
+      undefined,
+      undefined,
+      {
+        inspect: () => ({
+          state: "verified",
+          environmentKind: "release-validation",
+          deploymentMode: "package-assembled",
+          message: "fixture assembly verified",
+          databaseName: databaseEvidence.databaseName,
+        }),
+        prepare: vi.fn().mockResolvedValue(undefined),
+      },
+      {
+        inspect: vi.fn().mockResolvedValue(databaseEvidence),
+        assertReady: vi.fn().mockResolvedValue(databaseEvidence),
+      },
+    );
+    managers.push(manager);
+
+    await expect(manager.start(service.id)).rejects.toMatchObject({
+      code: "PROFILE_SPAWN_CONTRACT_FAILED",
+      message: expect.stringContaining("普通 PORT 不能替代"),
+    });
+    expect((await manager.status(service.id)).lifecycle).toBe("stopped");
   });
 
   it("任一 Profile 服务活动时拒绝显式建库且不调用数据库写动作", async () => {
